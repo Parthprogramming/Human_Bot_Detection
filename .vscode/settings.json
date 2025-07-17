@@ -1,0 +1,5 @@
+{
+    "Codegeex.CompletionDelay": 2,
+    "Codegeex.GenerationPreference": "automatic",
+    "git.ignoreLimitWarning": true
+}

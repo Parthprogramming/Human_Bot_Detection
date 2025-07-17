@@ -1,0 +1,44 @@
+# Pip installments
+selenium==4.15.2
+undetected-chromedriver==3.5.4
+selenium-stealth
+playwright==1.40.0
+pyautogui==0.9.54
+requests==2.31.0
+playwright playwright-stealth.
+setuptools
+Pillow
+pyscreeze
+opencv-python
+selenium webdriver-manager
+retrying
+locust
+pandas
+scikit-learn
+joblib
+mousepath
+anticaptchaofficial
+matplotlib
+seaborn
+pynput
+# Node.js packages (install with npm)
+
+npm i puppeteer-extra puppeteer-extra-plugin-stealth
+ghost-cursor
+npm install puppeteer ghost-cursor robotjs @fingerprintjs/fingerprintjs 
+playwright
+nightmare
+
+
+# System tools (Windows)
+# AutoHotkey (download from autohotkey.com)
+
+# Browser drivers
+# chromedriver (for Selenium Chrome)
+# geckodriver (for Selenium Firefox)
+# msedgedriver (for Selenium Edge)
+
+
+
+
+
