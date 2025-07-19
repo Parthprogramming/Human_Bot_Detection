@@ -161,266 +161,6 @@ def compute_cursor_angle_variance(cursorangle):
         return None
 
 
-def analyze_behavior(data):
-    """Enhanced behavior analysis with improved human-bot distinction"""
-    behavior = data.get("behavior", {})
-    cursor_movements = behavior.get("cursorMovements", [])
-    key_press_times = behavior.get("keyPressTimes", [])
-    key_hold_times = behavior.get("keyHoldTimes", [])
-    click_timestamps = behavior.get("clickTimestamps", [])
-    cursor_speeds = behavior.get("cursorSpeeds", [])
-    cursor_acceleration = behavior.get("cursorAcceleration", [])
-    cursor_curvature = behavior.get("cursorCurvature", [])
-    paste_detected = behavior.get("pasteDetected", False)
-    total_time = behavior.get("totalTimeToSubmit", 0)
-    bot_fingerprint_score = behavior.get("botFingerprintScore", 0)
-    suspicious_flag = behavior.get("suspiciousFlag", False)
-    suspicious_feature_ratio = behavior.get("suspiciousFeatureRatio", 0)
-    scroll_changes = behavior.get("scrollChanges", 0)
-    cursorangle = behavior.get("cursorAngle" , [])
-    mouseJitter = behavior.get("mouseJitter",[])
-    micropause = behavior.get("microPauses",[])
-    hesitation = behavior.get("hesitationTimes",[])
-    devicefingerprint = behavior.get("deviceFingerprint",0)
-    missing_canvas_fingerprint = behavior.get("missingCanvasFingerprint",False)
-    canvas_metrics = behavior.get("canvas_metrics",{})
-    unsualscreenresolution = behavior.get("unusualScreenResolution",{})
-    gpu_info = behavior.get("gpuInformation",{})
-    timing_metrics = behavior.get("timingMetrics",{})
-    evasion_signals = behavior.get("evasionSignals",{})
-    
-    
-    cursor_angle_variance = compute_cursor_angle_variance(cursorangle)  
-    behavior["cursor_angle_variance"] = cursor_angle_variance
-       
-    
-    confidence_score = 0.5  # Start neutral
-    feature_scores = {}
-    human_indicators = []
-    bot_indicators = []
-    
-    
-    import numpy as np  # Make sure this is imported at the top
-
-# Step 1: Extract the list of angles from behavior data
-    cursor_angles = behavior.get("cursorAngles", [])
-    cursor_angle_std = None  # Default if list is invalid
-    angle_variance_valid = False
-
-# Step 2: Ensure it's a valid list of numeric angles
-    if isinstance(cursor_angles, list) and len(cursor_angles) >= 5:
-        try:
-            cleaned_angles = [float(a) for a in cursor_angles if isinstance(a, (int, float))]
-
-            if len(cleaned_angles) >= 5:
-                cursor_angle_std = float(np.std(cleaned_angles))
-                angle_variance_valid = True
-                logger.info(f"[Angle Variance] STD={cursor_angle_std:.2f}")
-            else:
-                logger.warning("Not enough valid cursor angles to compute variance.")
-        except Exception as e:
-            logger.warning(f"Error calculating angle variance: {e}")
-    else:
-        logger.info("Not enough cursor angles to evaluate variance.")
-
-    if angle_variance_valid:
-        if cursor_angle_std > 30:
-            human_score += 0.15
-            human_indicators.append("varied_cursor_angles")
-        else:
-            bot_score += 0.15
-            bot_indicators.append("static_cursor_path")
-
-    # 1. Enhanced Typing Analysis (25% weight)
-    if key_press_times:
-        logger.info("\nTyping behavior analysis:")
-        typing_intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
-        
-        if typing_intervals:
-            avg_typing_interval = sum(typing_intervals) / len(typing_intervals)
-            std_typing_interval = np.std(typing_intervals) if len(typing_intervals) > 1 else 0
-            
-            logger.info(f"  Average typing interval: {avg_typing_interval}ms")
-            logger.info(f"  Typing interval std dev: {std_typing_interval}ms")
-            
-            # More nuanced typing pattern analysis
-            if 50 <= avg_typing_interval <= 800:  # Wider range for natural typing
-                if std_typing_interval > 30:  # Natural variation
-                    confidence_score += 0.15
-                    feature_scores["typing_variation"] = 0.9
-                    human_indicators.append("natural_typing_variation")
-                elif std_typing_interval > 15:  # Moderate variation
-                    confidence_score += 0.1
-                    feature_scores["typing_variation"] = 0.7
-                    human_indicators.append("moderate_typing_variation")
-            else:
-                confidence_score -= 0.1
-                feature_scores["typing_variation"] = 0.3
-                bot_indicators.append("unnatural_typing_speed")
-        
-        # Enhanced key hold analysis
-        if key_hold_times:
-            avg_hold = sum(key_hold_times) / len(key_hold_times)
-            hold_std = np.std(key_hold_times) if len(key_hold_times) > 1 else 0
-            
-            logger.info(f"  Average key hold: {avg_hold}ms")
-            logger.info(f"  Key hold std dev: {hold_std}ms")
-            
-            if 40 <= avg_hold <= 400:  # Wider range for natural holds
-                if hold_std > 20:  # Natural variation
-                    confidence_score += 0.1
-                    feature_scores["key_hold"] = 0.8
-                    human_indicators.append("natural_key_hold")
-                else:
-                    confidence_score += 0.05
-                    feature_scores["key_hold"] = 0.6
-                    human_indicators.append("moderate_key_hold")
-            else:
-                confidence_score -= 0.05
-                feature_scores["key_hold"] = 0.3
-                bot_indicators.append("unnatural_key_hold")
-    
-    # 2. Enhanced Cursor Movement Analysis (30% weight)
-    if cursor_movements:
-        logger.info("\nCursor movement analysis:")
-        movement_times = [m["timestamp"] for m in cursor_movements]
-        movement_durations = [movement_times[i] - movement_times[i-1] for i in range(1, len(movement_times))]
-        
-        if movement_durations:
-            avg_duration = sum(movement_durations) / len(movement_durations)
-            std_duration = np.std(movement_durations) if len(movement_durations) > 1 else 0
-            
-            logger.info(f"  Average duration: {avg_duration}ms")
-            logger.info(f"  Duration std dev: {std_duration}ms")
-            
-            # More nuanced cursor movement analysis
-            if 5 <= avg_duration <= 600:  # Wider range for natural movement
-                if std_duration > 10:  # Natural variation
-                    confidence_score += 0.15
-                    feature_scores["cursor_variation"] = 0.9
-                    human_indicators.append("natural_cursor_variation")
-                elif std_duration > 5:  # Moderate variation
-                    confidence_score += 0.1
-                    feature_scores["cursor_variation"] = 0.7
-                    human_indicators.append("moderate_cursor_variation")
-            else:
-                confidence_score -= 0.1
-                feature_scores["cursor_variation"] = 0.3
-                bot_indicators.append("unnatural_cursor_speed")
-        
-        # Enhanced acceleration analysis
-        if cursor_acceleration:
-            accel_std = np.std(cursor_acceleration) if len(cursor_acceleration) > 1 else 0
-            accel_mean = np.mean(cursor_acceleration)
-            
-            logger.info(f"  Acceleration std dev: {accel_std}")
-            logger.info(f"  Mean acceleration: {accel_mean}")
-            
-            if accel_std > 30 and abs(accel_mean) < 1000:  # Natural acceleration patterns
-                confidence_score += 0.1
-                feature_scores["cursor_acceleration"] = 0.8
-                human_indicators.append("natural_acceleration")
-            else:
-                confidence_score -= 0.05
-                feature_scores["cursor_acceleration"] = 0.3
-                bot_indicators.append("unnatural_acceleration")
-        
-        # Enhanced curvature analysis
-        if cursor_curvature:
-            avg_curvature = sum(cursor_curvature) / len(cursor_curvature)
-            curvature_std = np.std(cursor_curvature) if len(cursor_curvature) > 1 else 0
-            
-            logger.info(f"  Average curvature: {avg_curvature}")
-            logger.info(f"  Curvature std dev: {curvature_std}")
-            
-            if 0.4 <= avg_curvature <= 2.5 and curvature_std > 0.2:  # Natural curvature
-                confidence_score += 0.12  # Increased reward
-                has_human_behavior = True
-                human_indicators.append("natural_curvature")
-            else:
-                bot_score += 0.03  # Reduced penalty
-                bot_indicators.append("unnatural_curvature")
-    
-    # 3. Enhanced Click Analysis (15% weight)
-    if click_timestamps:
-        logger.info("\nClick analysis:")
-        if len(click_timestamps) >= 2:
-            click_intervals = [click_timestamps[i] - click_timestamps[i-1] for i in range(1, len(click_timestamps))]
-            avg_click_interval = sum(click_intervals) / len(click_intervals)
-            
-            logger.info(f"  Average click interval: {avg_click_interval}ms")
-            
-            if avg_click_interval > 150:  # Natural click timing
-                confidence_score += 0.1
-                feature_scores["click_timing"] = 0.8
-                human_indicators.append("natural_click_timing")
-            else:
-                confidence_score -= 0.05
-                feature_scores["click_timing"] = 0.3
-                bot_indicators.append("unnatural_click_timing")
-    
-    # 4. Enhanced Timing Analysis (20% weight)
-    if total_time > 0:
-        logger.info(f"\nTiming analysis:")
-        logger.info(f"  Total time to submit: {total_time}ms")
-        
-        if 1000 <= total_time <= 20000:  # Wider range for natural timing
-            if 2000 <= total_time <= 10000:  # Ideal range
-                confidence_score += 0.15
-                feature_scores["timing"] = 0.9
-                human_indicators.append("natural_timing")
-            else:
-                confidence_score += 0.1
-                feature_scores["timing"] = 0.7
-                human_indicators.append("acceptable_timing")
-        else:
-            confidence_score -= 0.1
-            feature_scores["timing"] = 0.3
-            bot_indicators.append("unnatural_timing")
-    
-    # 5. Enhanced Paste Behavior Analysis (10% weight)
-    if paste_detected:
-        logger.info("\nPaste behavior analysis:")
-        has_supporting_behavior = False
-        
-        if cursor_movements:
-            paste_time = min(m["timestamp"] for m in cursor_movements) if cursor_movements else 0
-            movements_before = sum(1 for m in cursor_movements if m["timestamp"] < paste_time)
-            movements_after = sum(1 for m in cursor_movements if m["timestamp"] > paste_time)
-            
-            if movements_before > 0 or movements_after > 0:
-                has_supporting_behavior = True
-                confidence_score += 0.05
-                feature_scores["paste_behavior"] = 0.8
-                human_indicators.append("natural_paste_behavior")
-        
-        if not has_supporting_behavior:
-            confidence_score -= 0.05
-            feature_scores["paste_behavior"] = 0.3
-            bot_indicators.append("suspicious_paste_behavior")
-    
-    
-    
-    is_human = confidence_score >= 0.6  
-    
-    # Additional checks for borderline cases
-    if 0.55 <= confidence_score < 0.6:
-        # If we have strong human indicators, lean towards human
-        if len(human_indicators) > len(bot_indicators):
-            is_human = True
-            logger.info("Borderline case: Leaning human due to strong human indicators")
-        else:
-            is_human = False
-            logger.info("Borderline case: Leaning bot due to strong bot indicators")
-    
-    logger.info(f"Final classification: {'Human' if is_human else 'Bot'}")
-    logger.info("=== ENHANCED BEHAVIOR ANALYSIS END ===\n")
-    
-    return is_human, confidence_score, {
-        "feature_scores": feature_scores,
-        "human_indicators": human_indicators,
-        "bot_indicators": bot_indicators
-    }
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -492,6 +232,82 @@ def analyze_user(request):
         gpu_info = behavior.get("gpuInformation",{})
         timing_metrics = behavior.get("timingMetrics",{})
         evasion_signals = behavior.get("evasionSignals",{})
+
+
+        if mouse_movement_debug:
+            dist = mouse_movement_debug.get("distance", None)
+            if dist is not None and dist > 0:
+                human_score += 0.01
+                human_indicators.append("mouse_movement_debug_present")
+   
+        if speed_calculation_debug:
+            raw_speed = speed_calculation_debug.get("rawSpeed", None)
+            if raw_speed is not None and raw_speed > 0:
+                human_score += 0.01
+                human_indicators.append("speed_calculation_debug_present")
+
+        if post_paste_activity:
+            actions = post_paste_activity.get("actionsAfterPaste", [])
+            if actions and len(actions) > 0:
+                human_score += 0.01
+                human_indicators.append("post_paste_activity_present")
+  
+        if keyboard_patterns and len(keyboard_patterns) > 3:
+            human_score += 0.01
+            human_indicators.append("keyboard_patterns_present")
+      
+        if suspicious_patterns and len(suspicious_patterns) > 0:
+            bot_score += 0.01
+            bot_indicators.append("suspicious_patterns_present")
+        
+        if action_count and action_count > 10:
+            human_score += 0.01
+            human_indicators.append("action_count_present")
+        
+        if tabKeyCount and tabKeyCount > 2:
+            human_score += 0.01
+            human_indicators.append("tabKeyCount_present")
+        
+        if mouseJitter and isinstance(mouseJitter, list) and sum(mouseJitter) > 0:
+            human_score += 0.01
+            human_indicators.append("mouseJitter_present")
+        
+        if micropause and isinstance(micropause, list) and sum(micropause) > 0:
+            human_score += 0.01
+            human_indicators.append("micropause_present")
+        
+        if hesitation and isinstance(hesitation, list) and sum(hesitation) > 0:
+            human_score += 0.01
+            human_indicators.append("hesitation_present")
+       
+        if devicefingerprint:
+            human_score += 0.01
+            human_indicators.append("devicefingerprint_present")
+        
+        if canvas_metrics and canvas_metrics.get("width", 0) > 0 and canvas_metrics.get("height", 0) > 0:
+            human_score += 0.01
+            human_indicators.append("canvas_metrics_present")
+        
+        if unsualscreenresolution:
+            width = unsualscreenresolution.get("width", 0)
+            height = unsualscreenresolution.get("height", 0)
+            if width > 400 and height > 300:
+                human_score += 0.01
+                human_indicators.append("screen_resolution_present")
+        
+        if gpu_info:
+            vendor = str(gpu_info.get("vendor", "")).lower()
+            if vendor and vendor not in ["microsoft", "llvmpipe", "swiftshader", "mesa", "google", "virtualbox", "vmware", "parallels"]:
+                human_score += 0.01
+                human_indicators.append("gpu_info_present")
+        
+        if timing_metrics:
+            human_score += 0.01
+            human_indicators.append("timing_metrics_present")
+        
+        if evasion_signals and any(evasion_signals.values()):
+            bot_score += 0.01
+            bot_indicators.append("evasion_signals_present")
     
         cursor_angle_variance = compute_cursor_angle_variance(cursorangle)  
         behavior["cursor_angle_variance"] = cursor_angle_variance
@@ -806,154 +622,7 @@ def analyze_user(request):
         )
         behavior_data.save()
         
-        if is_human:
-            return JsonResponse({
-                "status": "success",
-                "message": "User verified successfully!",
-                "classification": "Human",
-                "score": round(human_score * 100),
-                "metrics": {
-                    "human_score": round(human_score * 100),
-                    "bot_score": round(bot_score * 100),
-                    "human_indicators": human_indicators,
-                    "bot_indicators": bot_indicators,
-                    "has_human_behavior": has_human_behavior
-                },
-                "behavior_data": {
-                    "usai_id": data.get("usai_id", "unknown"),
-                    "behavior": {
-                        
-                        "cursorMovements": behavior.get("cursorMovements", []),
-                        "cursorSpeeds": behavior.get("cursorSpeeds", []),
-                        "cursorCurvature": behavior.get("cursorCurvature", []),
-                        "cursorAcceleration": behavior.get("cursorAcceleration", []),
-                        "cursorAngleVariance": cursor_angle_variance,
-                        "Entropy": behavior.get("entropy", None),
-                        "keyPressTimes": behavior.get("keyPressTimes", []),
-                        "keyHoldTimes": behavior.get("keyHoldTimes", []),
-                        "clickTimes": behavior.get("clickTimes", []),
-                        "clickTimestamps": behavior.get("clickTimestamps", []),
-                        "scrollSpeeds": behavior.get("scrollSpeeds", []),
-                        "totalTimeToSubmit": behavior.get("totalTimeToSubmit", 0),
-                        "scrollChanges": behavior.get("scrollChanges", 0),
-                        "idleTime": behavior.get("idleTime", 0),
-                        "pasteDetected": behavior.get("pasteDetected", False),
-                        "postPasteActivity": behavior.get("postPasteActivity", {}),
-                        "keyboardPatterns": behavior.get("keyboardPatterns", []),
-                        "suspiciousPatterns": behavior.get("suspiciousPatterns", []),
-                        "actionCount": behavior.get("actionCount", 0),
-                        "isAutomatedBrowser": behavior.get("isAutomatedBrowser", False),
-                        "botFingerprintScore": behavior.get("botFingerprintScore", 0),
-                        "mouseMovementDebug": {
-                            "distance": behavior.get("mouseMovementDebug", {}).get("distance", 0),
-                            "timeDiff": behavior.get("mouseMovementDebug", {}).get("timeDiff", 0),
-                            "dx": behavior.get("mouseMovementDebug", {}).get("dx", 0),
-                            "dy": behavior.get("mouseMovementDebug", {}).get("dy", 0),
-                            "currentSpeed": behavior.get("mouseMovementDebug", {}).get("currentSpeed", 0)
-                        },
-                        "speedCalculationDebug": {
-                            "rawSpeed": behavior.get("speedCalculationDebug", {}).get("rawSpeed", 0),
-                            "filteredSpeed": behavior.get("speedCalculationDebug", {}).get("filteredSpeed", 0),
-                            "latestSpeed": behavior.get("speedCalculationDebug", {}).get("latestSpeed", 0)
-                        },
-                        "mouseJitter": behavior.get("mouseJitter", []),
-                        "microPauses": behavior.get("microPauses", []),
-                        "hesitationTimes": behavior.get("hesitationTimes", []),
-                    },
-                    "verification_status": {
-                        "status": "success",
-                        "message": "User verified successfully!",
-                        "classification": "Human",
-                        "score": round(human_score * 100),
-                        "metrics": {
-                            "human_score": round(human_score * 100),
-                            "bot_score": round(bot_score * 100),
-                            "human_indicators": human_indicators,
-                            "bot_indicators": bot_indicators,
-                            "has_human_behavior": has_human_behavior
-                        }
-                    },
-                    "human_or_bot": "Human",
-                    "cursor_speeds": behavior.get("cursorSpeeds", []),
-                    "click_intervals": click_intervals,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    
-                    
-                }
-                 
-            })
-       
-            
-        else:
-            return JsonResponse({
-                "status": "rejected",
-                "message": "Automated behavior detected! Access denied.",
-                "classification": "Bot",
-                "score": round(bot_score * 100),
-                "metrics": {
-                    "human_score": round(human_score * 100),
-                    "bot_score": round(bot_score * 100),
-                    "human_indicators": human_indicators,
-                    "bot_indicators": bot_indicators,
-                    "has_human_behavior": has_human_behavior
-                },
-                "behavior_data": {
-                    "usai_id": data.get("usai_id", "unknown"),
-                    "behavior": {
-                        "cursorMovements": behavior.get("cursorMovements", []),
-                        "cursorSpeeds": behavior.get("cursorSpeeds", []),
-                        "cursorCurvature": behavior.get("cursorCurvature", []),
-                        "cursorAcceleration": behavior.get("cursorAcceleration", []),
-                        "keyPressTimes": behavior.get("keyPressTimes", []),
-                        "keyHoldTimes": behavior.get("keyHoldTimes", []),
-                        "clickTimes": behavior.get("clickTimes", []),
-                        "clickTimestamps": behavior.get("clickTimestamps", []),
-                        "scrollSpeeds": behavior.get("scrollSpeeds", []),
-                        "totalTimeToSubmit": behavior.get("totalTimeToSubmit", 0),
-                        "scrollChanges": behavior.get("scrollChanges", 0),
-                        "idleTime": behavior.get("idleTime", 0),
-                        "pasteDetected": behavior.get("pasteDetected", False),
-                        "postPasteActivity": behavior.get("postPasteActivity", {}),
-                        "keyboardPatterns": behavior.get("keyboardPatterns", []),
-                        "suspiciousPatterns": behavior.get("suspiciousPatterns", []),
-                        "actionCount": behavior.get("actionCount", 0),
-                        "isAutomatedBrowser": behavior.get("isAutomatedBrowser", False),
-                        "botFingerprintScore": behavior.get("botFingerprintScore", 0),
-                        "mouseMovementDebug": {
-                            "distance": behavior.get("mouseMovementDebug", {}).get("distance", 0),
-                            "timeDiff": behavior.get("mouseMovementDebug", {}).get("timeDiff", 0),
-                            "dx": behavior.get("mouseMovementDebug", {}).get("dx", 0),
-                            "dy": behavior.get("mouseMovementDebug", {}).get("dy", 0),
-                            "currentSpeed": behavior.get("mouseMovementDebug", {}).get("currentSpeed", 0)
-                        },
-                        "speedCalculationDebug": {
-                            "rawSpeed": behavior.get("speedCalculationDebug", {}).get("rawSpeed", 0),
-                            "filteredSpeed": behavior.get("speedCalculationDebug", {}).get("filteredSpeed", 0),
-                            "latestSpeed": behavior.get("speedCalculationDebug", {}).get("latestSpeed", 0)
-                        },
-                        "mouseJitter": behavior.get("mouseJitter", []),
-                        "microPauses": behavior.get("microPauses", []),
-                        "hesitationTimes": behavior.get("hesitationTimes", []),
-                    },
-                    "verification_status": {
-                        "status": "rejected",
-                        "message": "Automated behavior detected! Access denied.",
-                        "classification": "Bot",
-                        "score": round(bot_score * 100),
-                        "metrics": {
-                            "human_score": round(human_score * 100),
-                            "bot_score": round(bot_score * 100),
-                            "human_indicators": human_indicators,
-                            "bot_indicators": bot_indicators,
-                            "has_human_behavior": has_human_behavior
-                        }
-                    },
-                    "human_or_bot": "Bot",
-                    "cursor_speeds": behavior.get("cursorSpeeds", []),
-                    "click_intervals": click_intervals,
-                    "timestamp": datetime.datetime.now().isoformat()
-                }
-            }, status=200)
+        
         
     except Exception as e:
         logger.error("Error analyzing behavior:")
