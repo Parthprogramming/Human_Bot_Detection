@@ -23,6 +23,8 @@ X = data.drop(columns=["label", "usai_id", "classification", "timestamp"], error
 y = data["label"]
 print("🔹 Final features used for training:", list(X.columns))
 
+# After extracting X and y
+X = X.select_dtypes(include=["number", "bool"])
 # 4. Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -40,6 +42,7 @@ stacked_model = StackingClassifier(
     cv=5,
     passthrough=True
 )
+print(data.select_dtypes(include=["number", "bool"]).groupby('label').mean().T)
 
 joblib.dump(list(X.columns), "model-2.joblib")
 

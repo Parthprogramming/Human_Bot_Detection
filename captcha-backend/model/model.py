@@ -40,6 +40,8 @@ for c in X.select_dtypes(include=["number"]).columns:
 
 # ────────────────────────── 3. Low-variance prune ---------------------------
 vt = VarianceThreshold(threshold=0.0)
+# Keep only numeric and boolean columns for ML
+X = X.select_dtypes(include=["number", "bool"])
 X = pd.DataFrame(vt.fit_transform(X), columns=X.columns[vt.get_support()])
 
 # ────────────────────────── 4. Correlation prune ----------------------------
@@ -162,7 +164,7 @@ proba_test = calibrated.predict_proba(X_test)[:, 1]
 y_pred = (proba_test >= 0.5).astype(int)
 
 print("Label distribution:", y.value_counts())
-print(df.groupby('label').mean().T)
+print(df.select_dtypes(include=["number", "bool"]).groupby('label').mean().T)
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
 
