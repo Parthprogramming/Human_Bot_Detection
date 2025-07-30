@@ -348,33 +348,6 @@ def analyze_user(request):
             elif avg_duration < 3 or avg_duration > 1200 or std_duration < 5:
                 bot_score += 0.08  # Reduced penalty
                 bot_indicators.append("unnatural_movement")
-        else:
-            strong_human_typing = False
-            if key_press_times and len(key_press_times) >= 2:
-                typing_intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
-                avg_typing = sum(typing_intervals) / len(typing_intervals)
-                std_typing = np.std(typing_intervals) if len(typing_intervals) > 1 else 0
-                if 40 <= avg_typing <= 900 and std_typing > 20:
-                    strong_human_typing = True
-
-            reasonable_time = 1000 <= total_time <= 30000
-            has_human_key_hold = False
-            if key_hold_times:
-                avg_hold = sum(key_hold_times) / len(key_hold_times)
-                std_hold = np.std(key_hold_times) if len(key_hold_times) > 1 else 0
-                if 10 <= avg_hold <= 1500 and std_hold > 3:
-                    has_human_key_hold = True
-
-            # If strong human typing, reasonable time, and/or human key hold, treat as human
-            if strong_human_typing or (reasonable_time and has_human_key_hold):
-                human_score += 0.15
-                has_human_behavior = True
-                human_indicators.append("low_cursor_but_human_typing")
-            else:
-                # Only penalize if other bot signals are present
-                if (not strong_human_typing) and (not has_human_key_hold):
-                    bot_score += 0.10
-                    bot_indicators.append("low_cursor_and_no_human_typing")
 
         # 3. Click Analysis - Softer
         if click_timestamps and len(click_timestamps) >= 2:
@@ -516,82 +489,6 @@ def analyze_user(request):
                 human_score += 0.02
                 human_indicators.append("normal_screen_resolution")
 
-        # --- SPECIAL CASE: ZERO CURSOR MOVEMENTS ---
-        if not cursor_movements or len(cursor_movements) == 0:
-            # Weighted scoring for strong human signals
-            human_signal_score = 0
-            moderate_signal_score = 0
-            # 1. Natural typing intervals
-            if key_press_times and len(key_press_times) > 3:
-                typing_intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
-                if 40 < np.std(typing_intervals) < 400:
-                    human_signal_score += 2  # higher weight for natural typing
-                # Entropy in typing intervals
-                if len(set(typing_intervals)) > 2 and shannon_entropy(typing_intervals) > 0.5:
-                    moderate_signal_score += 1
-            # 2. Natural key hold
-            if key_hold_times and len(key_hold_times) > 2:
-                avg_hold = sum(key_hold_times) / len(key_hold_times)
-                std_hold = np.std(key_hold_times) if len(key_hold_times) > 1 else 0
-                if 10 <= avg_hold <= 1500 and std_hold > 3:
-                    human_signal_score += 1
-                # Entropy in key hold times
-                if len(set(key_hold_times)) > 2 and shannon_entropy(key_hold_times) > 0.5:
-                    moderate_signal_score += 1
-            # 3. Scroll activity
-            if scroll_speeds and len(scroll_speeds) > 0:
-                human_signal_score += 1
-            # 4. Paste activity
-            if behavior.get("pasteDetected", False) or behavior.get("paste_detected", False):
-                human_signal_score += 1
-            # 5. Tab key activity
-            if behavior.get("tabkeyCount", 0) > 0 or behavior.get("tabKeyCount", 0) > 0:
-                human_signal_score += 1
-            # 6. Hesitation/micropauses
-            if hesitation and isinstance(hesitation, list) and len(hesitation) > 0 and sum(hesitation) > 0:
-                human_signal_score += 1
-            # 7. Reasonable total time to submit
-            if 2_000 < total_time < 120_000:
-                human_signal_score += 1
-            # 8. Multiple unique actions
-            unique_actions = 0
-            if key_press_times and len(key_press_times) > 2:
-                unique_actions += 1
-            if key_hold_times and len(key_hold_times) > 2:
-                unique_actions += 1
-            if scroll_speeds and len(scroll_speeds) > 0:
-                unique_actions += 1
-            if behavior.get("pasteDetected", False) or behavior.get("paste_detected", False):
-                unique_actions += 1
-            if behavior.get("tabkeyCount", 0) > 0 or behavior.get("tabKeyCount", 0) > 0:
-                unique_actions += 1
-            if unique_actions >= 3:
-                human_signal_score += 1
-            # 9. Post-paste activity
-            if behavior.get("postPasteActivity", {}) or behavior.get("post_paste_activity", {}):
-                moderate_signal_score += 1
-            # 10. Multiple keyboard patterns
-            if behavior.get("keyboardPatterns", []) and len(behavior.get("keyboardPatterns", [])) > 2:
-                moderate_signal_score += 1
-            # 11. Scroll changes
-            if behavior.get("scrollChanges", 0) > 0 or behavior.get("scroll_changes", 0) > 0:
-                moderate_signal_score += 1
-            # 12. Absence of suspicious patterns
-            if not behavior.get("suspiciousPatterns", []):
-                moderate_signal_score += 1
-            # 13. Absence of strong bot signals
-            strong_bot_signals_present = (
-                is_automated_browser or
-                bot_fingerprint_score > 0.85 or
-                ("webdriver_flagged" in bot_indicators) or
-                ("perfect_click_intervals" in bot_indicators)
-            )
-            # Tiered scoring: classify as human if strong signals or high combined score, else let existing logic decide
-            if (not strong_bot_signals_present and (human_signal_score >= 3 or (human_signal_score + moderate_signal_score) >= 6)):
-                human_score += 0.30
-                has_human_behavior = True
-                human_indicators.append("zero_cursor_tiered_human_signals")
-
         # --- Require more bot indicators for bot classification ---
         critical_bot_indicators = set([
             "impossible_entropy", "no_mouse_jitter", "perfect_click_intervals", "no_micro_pauses", "no_hesitation"
@@ -675,71 +572,6 @@ def analyze_user(request):
                 }
             }, status=200)
         
-
-
-        unique_actions = 0
-        if key_press_times and len(key_press_times) > 2:
-            unique_actions += 1
-        if key_hold_times and len(key_hold_times) > 2:
-            unique_actions += 1
-        if scroll_speeds and len(scroll_speeds) > 0:
-            unique_actions += 1
-        if behavior.get("pasteDetected", False) or behavior.get("paste_detected", False):
-            unique_actions += 1
-        if behavior.get("tabkeyCount", 0) > 0 or behavior.get("tabKeyCount", 0) > 0:
-            unique_actions += 1
-
-        # If user performed at least 3 types of actions, and no strong bot indicators, treat as human
-        strong_bot_signals = (
-            is_automated_browser or
-            bot_fingerprint_score > 0.85 or
-            ("webdriver_flagged" in bot_indicators) or
-            ("perfect_click_intervals" in bot_indicators)
-        )
-
-        # --- ADVANCED HUMAN-LIKE SIGNALS FOR LOW CURSOR MOVEMENT ---
-
-        # 1. Natural timing in typing intervals
-        natural_typing_variance = False
-        if key_press_times and len(key_press_times) > 3:
-            typing_intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
-            if 20 < np.std(typing_intervals) < 400:
-                natural_typing_variance = True
-
-        # 2. Reasonable total time to submit
-        reasonable_submit_time = 2_000 < total_time < 120_000  # 2s to 2min
-
-        # 3. Mouse/keyboard interleaving
-        mouse_keyboard_interleaved = False
-        if cursor_movements and key_press_times:
-            first_mouse = cursor_movements[0]['timestamp'] if cursor_movements else None
-            first_key = key_press_times[0] if key_press_times else None
-            if first_mouse and first_key and abs(first_mouse - first_key) < 10_000:
-                mouse_keyboard_interleaved = True
-
-        # 4. Hesitation/micropauses
-        has_hesitation = False
-        if hesitation and isinstance(hesitation, list) and len(hesitation) > 0 and sum(hesitation) > 0:
-            has_hesitation = True
-
-        # If at least 2 of these advanced signals are present and no strong bot signals, reward as human
-        advanced_human_signals = sum([
-            natural_typing_variance,
-            reasonable_submit_time,
-            mouse_keyboard_interleaved,
-            has_hesitation
-        ])
-
-        if advanced_human_signals >= 2 and not strong_bot_signals:
-            human_score += 0.12
-            has_human_behavior = True
-            human_indicators.append("advanced_human_signals_low_cursor")
-
-        if unique_actions >= 3 and not strong_bot_signals:
-            human_score += 0.18
-            has_human_behavior = True
-            human_indicators.append("diverse_actions_low_cursor")
-
         behavior_data = UserBehavior_v2(
             usai_id=data.get("usai_id", "unknown"),
             cursor_movements=behavior.get("cursorMovements", []),
@@ -787,6 +619,23 @@ def analyze_user(request):
         )
         behavior_data.save()
         
+        return JsonResponse({
+            "status": "verified" if is_human else "rejected",
+            "message": "Human verified!" if is_human else "Bot detected!",
+            "classification": "Human" if is_human else "Bot",
+            "score": round(human_score * 100),
+            "metrics": {
+                "human_score": round(human_score * 100),
+                "bot_score": round(bot_score * 100),
+                "human_indicators": human_indicators,
+                "bot_indicators": bot_indicators,
+                "has_human_behavior": has_human_behavior
+            },
+            "behavior_data": {
+                "usai_id": data.get("usai_id", "unknown"),
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        }, status=200)
         
         
     except Exception as e:
