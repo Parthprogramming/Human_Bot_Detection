@@ -489,11 +489,6 @@ def analyze_user(request):
                 human_score += 0.02
                 human_indicators.append("normal_screen_resolution")
 
-        
-
-        
-
-        # --- Require more bot indicators for bot classification ---
         critical_bot_indicators = set([
             "impossible_entropy", "no_mouse_jitter", "perfect_click_intervals", "no_micro_pauses", "no_hesitation"
         ])
