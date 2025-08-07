@@ -3,13 +3,13 @@ from django.utils import timezone
 import json
 
 class HttpBotDetection(models.Model):
-    
     ip_address = models.GenericIPAddressField()
     timestamp = models.DateTimeField(default=timezone.now)
     user_agent = models.TextField()
+    headers = models.JSONField(default=dict, blank=True)
     endpoint = models.CharField(max_length=255)
     method = models.CharField(max_length=10)
-    request_interval = models.FloatField(null=True, blank=True)  # seconds between requests
+    request_interval = models.FloatField(null=True, blank=True)  
     payload_schema_valid = models.BooleanField(default=True)
     cookies_present = models.BooleanField(default=False)
     confidence = models.FloatField()  # 0.0 to 1.0
@@ -20,6 +20,7 @@ class HttpBotDetection(models.Model):
     is_headless_browser = models.BooleanField(default=False)
     automation_detected = models.BooleanField(default=False)
     rate_limit_exceeded = models.BooleanField(default=False)
+    cookies = models.JSONField(default=dict, blank=True)
     
     class Meta:
         db_table = 'httpbot_detection'

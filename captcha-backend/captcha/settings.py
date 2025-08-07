@@ -140,6 +140,20 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+# Session and CSRF configuration for development (cross-origin)
+SESSION_COOKIE_SAMESITE = 'Lax'  # Changed from 'None' for better compatibility
+CSRF_COOKIE_SAMESITE = 'Lax'     # Changed from 'None' for better compatibility
+SESSION_COOKIE_SECURE = False    # False for development (HTTP)
+CSRF_COOKIE_SECURE = False       # False for development (HTTP)
+SESSION_COOKIE_HTTPONLY = True   # Security: prevent JS access to session cookie
+SESSION_COOKIE_AGE = 86400        # 24 hours
+SESSION_SAVE_EVERY_REQUEST = True # Force session save on every request
+CSRF_USE_SESSIONS = False         # Store CSRF token in cookie, not session
+
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
@@ -153,4 +167,11 @@ CORS_ALLOW_METHODS = [
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-csrftoken',
+    'cache-control',
+    'pragma',
+    'x-session-id',
+    'x-requested-with',
+    'x-usai-id',
+    'x-browser-fingerprint',
+    'x-verification-type',
 ]
