@@ -1,0 +1,12 @@
+✅Entropy of cursor path
+✅Typing rhythm/variance
+Total time between click/submit
+Session time + Idle time
+| What to Add                            | Why                                       |
+| -------------------------------------- | ----------------------------------------- |
+|✅ Browser fingerprinting (JS-level)      | Catch Puppeteer, headless Chrome          |
+| Interaction timing & latency analysis  | Real humans take time to act              |
+| Event consistency validation           | RobotJS fakes input but lacks true events |
+| Entropy “too perfect” filter           | Ghost-cursor mimics well — too well       |
+| Scroll, hover, idle behavior detection | Bots often skip or fake these             |
+| Cursor jitter + hesitation detection   | Smooth bots vs messy humans               |

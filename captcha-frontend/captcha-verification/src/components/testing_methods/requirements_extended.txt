@@ -1,0 +1,31 @@
+# Core automation tools
+selenium==4.15.2
+undetected-chromedriver==3.5.4
+
+# Additional automation tools
+playwright==1.40.0
+pyautogui==0.9.54
+requests==2.31.0
+
+# Node.js packages (install with npm)
+# puppeteer
+# ghost-cursor
+# robotjs
+# @fingerprintjs/fingerprintjs
+# playwright
+# nightmare
+# cypress
+
+# System tools (Windows)
+# AutoHotkey (download from autohotkey.com)
+
+# Browser drivers
+# chromedriver (for Selenium Chrome)
+# geckodriver (for Selenium Firefox)
+# msedgedriver (for Selenium Edge)
+
+# Installation commands:
+# pip install -r requirements_extended.txt
+# npm install puppeteer ghost-cursor robotjs @fingerprintjs/fingerprintjs playwright nightmare
+# npm install -g cypress
+# playwright install 
