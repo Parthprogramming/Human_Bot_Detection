@@ -2,44 +2,84 @@ import { useState, useEffect, useRef, useMemo, use } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { useNavigate } from 'react-router-dom';
 import "./captcha-form.css";
+import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
 
+const BEHAVIORAL_DATA_KEY_AUTH = 'behavioral_data_auth_session';
+
+const saveBehavioralData = (data) => {
+  try {
+    localStorage.setItem(BEHAVIORAL_DATA_KEY_AUTH, JSON.stringify(data));
+    console.log('✅ Auth User behavioral data saved to localStorage');
+  } catch (error) {
+    console.error('Error saving auth user behavioral data:', error);
+  }
+};
+
+const loadBehavioralData = () => {
+  try {
+    const savedData = localStorage.getItem(BEHAVIORAL_DATA_KEY_AUTH);
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      console.log('📋 Auth User behavioral data loaded from localStorage:', Object.keys(parsedData).length, 'properties');
+      return parsedData;
+    }
+    console.log('🆕 No saved auth user behavioral data found, starting fresh');
+    return null;
+  } catch (error) {
+    console.error('Error loading auth user behavioral data:', error);
+    return null;
+  }
+};
+
+const clearBehavioralData = () => {
+  try {
+    localStorage.removeItem(BEHAVIORAL_DATA_KEY_AUTH);
+    console.log('🧹 Auth User behavioral data cleared from localStorage');
+  } catch (error) {
+    console.error('Error clearing auth user behavioral data:', error);
+  }
+};
 
 const Authenticate_user = () => {
   const prevpoint = useRef(null);
-  const [usaiId, setUsaiId] = useState("");
-  const [cursorMovements, setCursorMovements] = useState([]);
-  const [cursorSpeeds, setCursorSpeeds] = useState([]);
-  const [cursorAcceleration, setCursorAcceleration] = useState([]);
-  const [cursorJitter, setCursorJitter] = useState([]);
-  const [keyPressTimes, setKeyPressTimes] = useState([]);
-  const [cursorCurvature, setCursorCurvature] = useState([]);
-  const [keyHoldTimes, setKeyHoldTimes] = useState([]);
-  const [clickTimes, setClickTimes] = useState([]);
-  const [scrollSpeeds, setScrollSpeeds] = useState([]);
-  const [scrollChanges, setScrollChanges] = useState(0);
-  const [idleTime, setIdleTime] = useState(0);
-  const [pasteDetected, setPasteDetected] = useState(false);
+  
+  // Load saved behavioral data on component initialization
+  const savedData = loadBehavioralData() || {};
+  
+  const [usaiId, setUsaiId] = useState(savedData.usaiId || "");
+  const [cursorMovements, setCursorMovements] = useState(savedData.cursorMovements || []);
+  const [cursorSpeeds, setCursorSpeeds] = useState(savedData.cursorSpeeds || []);
+  const [cursorAcceleration, setCursorAcceleration] = useState(savedData.cursorAcceleration || []);
+  const [cursorJitter, setCursorJitter] = useState(savedData.cursorJitter || []);
+  const [keyPressTimes, setKeyPressTimes] = useState(savedData.keyPressTimes || []);
+  const [cursorCurvature, setCursorCurvature] = useState(savedData.cursorCurvature || []);
+  const [keyHoldTimes, setKeyHoldTimes] = useState(savedData.keyHoldTimes || []);
+  const [clickTimes, setClickTimes] = useState(savedData.clickTimes || []);
+  const [scrollSpeeds, setScrollSpeeds] = useState(savedData.scrollSpeeds || []);
+  const [scrollChanges, setScrollChanges] = useState(savedData.scrollChanges || 0);
+  const [idleTime, setIdleTime] = useState(savedData.idleTime || 0);
+  const [pasteDetected, setPasteDetected] = useState(savedData.pasteDetected || false);
   const [message, setMessage] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [isBlocked, setIsBlocked] = useState(false);
-  const [clickTimestamps, setClickTimestamps] = useState([]);
-  const [lastKeyPress, setLastKeyPress] = useState(null);
-  const [lastKeyDown, setLastKeyDown] = useState({});
-  const [lastMouseMove, setLastMouseMove] = useState(null);
-  const [lastClickTime, setLastClickTime] = useState(null);
-  const [lastScroll, setLastScroll] = useState(0);
-  const [latestSpeed, setLatestSpeed] = useState(0);
-  const [allSpeeds, setAllSpeeds] = useState([]);
-  const [lastUpdateTime, setLastUpdateTime] = useState(0);
-  const [lastScrollTime, setLastScrollTime] = useState(Date.now());
-  const [pasteTimestamp, setPasteTimestamp] = useState(null);
-  const [cursorEntropy, setCursorEntropy] = useState(0);
-  const [botFingerprintScore, setBotFingerprintScore] = useState(null);
-  const [pageLoadTime, setPageLoadTime] = useState(null);
-  const [submitTime, setSubmitTime] = useState(null);
-  const [TabKeyCount, setTabkeycount] = useState(0);
-  const [cursorAngles, setCursorAngles] = useState([]);
+  const [clickTimestamps, setClickTimestamps] = useState(savedData.clickTimestamps || []);
+  const [lastKeyPress, setLastKeyPress] = useState(savedData.lastKeyPress || null);
+  const [lastKeyDown, setLastKeyDown] = useState(savedData.lastKeyDown || {});
+  const [lastMouseMove, setLastMouseMove] = useState(savedData.lastMouseMove || null);
+  const [lastClickTime, setLastClickTime] = useState(savedData.lastClickTime || null);
+  const [lastScroll, setLastScroll] = useState(savedData.lastScroll || 0);
+  const [latestSpeed, setLatestSpeed] = useState(savedData.latestSpeed || 0);
+  const [allSpeeds, setAllSpeeds] = useState(savedData.allSpeeds || []);
+  const [lastUpdateTime, setLastUpdateTime] = useState(savedData.lastUpdateTime || 0);
+  const [lastScrollTime, setLastScrollTime] = useState(savedData.lastScrollTime || Date.now());
+  const [pasteTimestamp, setPasteTimestamp] = useState(savedData.pasteTimestamp || null);
+  const [cursorEntropy, setCursorEntropy] = useState(savedData.cursorEntropy || 0);
+  const [botFingerprintScore, setBotFingerprintScore] = useState(savedData.botFingerprintScore || null);
+  const [pageLoadTime, setPageLoadTime] = useState(savedData.pageLoadTime || null);
+  const [submitTime, setSubmitTime] = useState(savedData.submitTime || null);
+  const [TabKeyCount, setTabkeycount] = useState(savedData.TabKeyCount || 0);
+  const [cursorAngles, setCursorAngles] = useState(savedData.cursorAngles || []);
 
   const navigate = useNavigate();
 
@@ -47,8 +87,7 @@ const Authenticate_user = () => {
     navigate('/http-bot-check');
   };
 
-
-  const [postPasteActivity, setPostPasteActivity] = useState({
+  const [postPasteActivity, setPostPasteActivity] = useState(savedData.postPasteActivity || {
     keyPresses: 0,
     mouseMoves: 0,
     clicks: 0,
@@ -58,33 +97,32 @@ const Authenticate_user = () => {
     clipboardContent: null,
   });
 
-  const [mouseTrajectory, setMouseTrajectory] = useState([]);
-  const [keyboardPatterns, setKeyboardPatterns] = useState([]);
-  const [deviceInfo, setDeviceInfo] = useState({});
-  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(false);
-  const [lastActionTime, setLastActionTime] = useState(Date.now());
-  const [actionCount, setActionCount] = useState(0);
-  const [suspiciousPatterns, setSuspiciousPatterns] = useState([]);
-  const [botDetectionResults, setBotDetectionResults] = useState(null);
+  const [mouseTrajectory, setMouseTrajectory] = useState(savedData.mouseTrajectory || []);
+  const [keyboardPatterns, setKeyboardPatterns] = useState(savedData.keyboardPatterns || []);
+  const [deviceInfo, setDeviceInfo] = useState(savedData.deviceInfo || {});
+  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(savedData.isAutomatedBrowser || false);
+  const [lastActionTime, setLastActionTime] = useState(savedData.lastActionTime || Date.now());
+  const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
+  const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
+  const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
 
+  const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
+  const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
+  const [hesitationTimes, setHesitationTimes] = useState(savedData.hesitationTimes || []);
+  const [lastHoverStart, setLastHoverStart] = useState(savedData.lastHoverStart || null);
+  const [deviceFingerprint, setDeviceFingerprint] = useState(savedData.deviceFingerprint || null);
 
-  const [mouseJitter, setMouseJitter] = useState([]); 
-  const [microPauses, setMicroPauses] = useState([]); 
-  const [hesitationTimes, setHesitationTimes] = useState([]);
-  const [lastHoverStart, setLastHoverStart] = useState(null);
-  const [deviceFingerprint, setDeviceFingerprint] = useState(null);
-
-  const [canvasMetrics, setCanvasMetrics] = useState({
+  const [canvasMetrics, setCanvasMetrics] = useState(savedData.canvasMetrics || {
     winding: null,
     geometryLength: 0,
     textLength: 0,
   });
 
   const [missingCanvasFingerprint, setMissingCanvasFingerprint] =
-    useState(true);
-  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(null);
-  const [evasionSignals, setEvasionSignals] = useState({});
-  const [unusualScreenResolution, setUnusualScreenResolution] = useState({
+    useState(savedData.missingCanvasFingerprint !== undefined ? savedData.missingCanvasFingerprint : true);
+  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(savedData.audio_fp_entropy_low || null);
+  const [evasionSignals, setEvasionSignals] = useState(savedData.evasionSignals || {});
+  const [unusualScreenResolution, setUnusualScreenResolution] = useState(savedData.unusualScreenResolution || {
     width_height: "0x0",
     inner_width: 0,
     device_pixel_ratio: 0,
@@ -93,7 +131,7 @@ const Authenticate_user = () => {
     aspectRatio: 0,
   });
 
-  const [gpuInfo, setGpuInfo] = useState({
+  const [gpuInfo, setGpuInfo] = useState(savedData.gpuInfo || {
     gpu_name: null,
     vendor: null,
     renderer: null,
@@ -104,19 +142,178 @@ const Authenticate_user = () => {
     graphics_api: null
   });
 
-  const [gpublacklist, setgpublacklist] = useState({
+  const [gpublacklist, setgpublacklist] = useState(savedData.gpublacklist || {
     gpu_name_blacklisted: false,
     gpu_name: null,
   });
 
-  const [timingMetrics, setTimingMetrics] = useState({});
-  const [cursorMicroJitter, setCursorMicroJitter] = useState(0);
-  const [pathEntropy, setPathEntropy] = useState(0);
-  const [accelerationVariance, setAccelerationVariance] = useState(0);
-  const [fittsDeviationScore, setFittsDeviationScore] = useState(0);
-  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(0);
-  const [thermalHoverNoise, setThermalHoverNoise] = useState(0);
-  const [hoverPositions, setHoverPositions] = useState([]);
+  const [timingMetrics, setTimingMetrics] = useState(savedData.timingMetrics || {});
+  const [cursorMicroJitter, setCursorMicroJitter] = useState(savedData.cursorMicroJitter || 0);
+  const [pathEntropy, setPathEntropy] = useState(savedData.pathEntropy || 0);
+  const [accelerationVariance, setAccelerationVariance] = useState(savedData.accelerationVariance || 0);
+  const [fittsDeviationScore, setFittsDeviationScore] = useState(savedData.fittsDeviationScore || 0);
+  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(savedData.idleResumeAngularJerk || 0);
+  const [thermalHoverNoise, setThermalHoverNoise] = useState(savedData.thermalHoverNoise || 0);
+  const [hoverPositions, setHoverPositions] = useState(savedData.hoverPositions || []);
+
+  // Initialize global behavioral tracking for auth-user page
+  useEffect(() => {
+    globalBehavioralTracker.setCurrentPage('auth-user');
+    console.log('🚀 Auth-user page initialized with global behavioral tracking');
+    
+    return () => {
+      console.log('🔄 Auth-user page cleanup');
+    };
+  }, []);
+
+  // Real-time sync with global behavioral tracker
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      const freshData = globalBehavioralTracker.getBehavioralData();
+      
+      // Update local state with fresh global data (non-conflicting properties)
+      setCursorMovements(freshData.cursorMovements || []);
+      setCursorSpeeds(freshData.cursorSpeeds || []);
+      setKeyPressTimes(freshData.keyPressTimes || []);
+      setClickTimestamps(freshData.clickTimestamps || []);
+      setScrollSpeeds(freshData.scrollSpeeds || []);
+      setPasteDetected(freshData.pasteDetected || false);
+      setTabkeycount(freshData.TabKeyCount || 0);
+      setActionCount(freshData.actionCount || 0);
+      setLastActionTime(freshData.lastActionTime || Date.now());
+      
+      // Update global tracker with specific auth-user data
+      globalBehavioralTracker.updateBehavioralData({
+        usaiId,
+        formData: { usaiId }
+      });
+    }, 1000);
+    
+    return () => clearInterval(syncInterval);
+  }, [usaiId]);
+
+  // Effect to persist behavioral data to localStorage whenever state changes
+  useEffect(() => {
+    const behavioralData = {
+      usaiId,
+      cursorMovements,
+      cursorSpeeds,
+      cursorAcceleration,
+      cursorJitter,
+      keyPressTimes,
+      cursorCurvature,
+      keyHoldTimes,
+      clickTimes,
+      scrollSpeeds,
+      scrollChanges,
+      idleTime,
+      pasteDetected,
+      clickTimestamps,
+      lastKeyPress,
+      lastKeyDown,
+      lastMouseMove,
+      lastClickTime,
+      lastScroll,
+      latestSpeed,
+      allSpeeds,
+      lastUpdateTime,
+      lastScrollTime,
+      pasteTimestamp,
+      cursorEntropy,
+      botFingerprintScore,
+      pageLoadTime,
+      submitTime,
+      TabKeyCount,
+      cursorAngles,
+      postPasteActivity,
+      mouseTrajectory,
+      keyboardPatterns,
+      deviceInfo,
+      isAutomatedBrowser,
+      lastActionTime,
+      actionCount,
+      suspiciousPatterns,
+      botDetectionResults,
+      mouseJitter,
+      microPauses,
+      hesitationTimes,
+      lastHoverStart,
+      deviceFingerprint,
+      canvasMetrics,
+      missingCanvasFingerprint,
+      audio_fp_entropy_low,
+      evasionSignals,
+      unusualScreenResolution,
+      gpuInfo,
+      gpublacklist,
+      timingMetrics,
+      cursorMicroJitter,
+      pathEntropy,
+      accelerationVariance,
+      fittsDeviationScore,
+      idleResumeAngularJerk,
+      thermalHoverNoise,
+      hoverPositions,
+    };
+    
+    saveBehavioralData(behavioralData);
+  }, [
+    usaiId, cursorMovements, cursorSpeeds, cursorAcceleration, cursorJitter,
+    keyPressTimes, cursorCurvature, keyHoldTimes, clickTimes, scrollSpeeds, scrollChanges,
+    idleTime, pasteDetected, clickTimestamps, lastKeyPress, lastKeyDown, lastMouseMove,
+    lastClickTime, lastScroll, latestSpeed, allSpeeds, lastUpdateTime, lastScrollTime,
+    pasteTimestamp, cursorEntropy, botFingerprintScore, pageLoadTime, submitTime,
+    TabKeyCount, cursorAngles, postPasteActivity, mouseTrajectory, keyboardPatterns,
+    deviceInfo, isAutomatedBrowser, lastActionTime, actionCount, suspiciousPatterns,
+    botDetectionResults, mouseJitter, microPauses, hesitationTimes, lastHoverStart,
+    deviceFingerprint, canvasMetrics, missingCanvasFingerprint, audio_fp_entropy_low,
+    evasionSignals, unusualScreenResolution, gpuInfo, gpublacklist, timingMetrics,
+    cursorMicroJitter, pathEntropy, accelerationVariance, fittsDeviationScore,
+    idleResumeAngularJerk, thermalHoverNoise, hoverPositions
+  ]);
+
+  // Add logout functionality to clear behavioral data
+  const handleLogout = () => {
+    clearBehavioralData();
+    globalBehavioralTracker.clearSession(); // Clear global session data
+    console.log('🔐 User logged out - all behavioral data cleared');
+    // Add any other logout logic here
+    navigate('/'); // or wherever you want to redirect after logout
+  };
+
+  // Effect to expose logout function globally (for use in other components)
+  useEffect(() => {
+    window.clearAuthBehavioralData = clearBehavioralData;
+    
+    // Log behavioral data restoration and initialization on mount
+    const dataCount = Object.values(savedData).reduce((total, value) => {
+      if (Array.isArray(value)) return total + value.length;
+      return total + (value ? 1 : 0);
+    }, 0);
+    
+    if (dataCount > 0) {
+      console.log(`🔄 Auth User: Restored ${dataCount} behavioral data points from localStorage`);
+      console.log('📊 Behavioral tracking will continue from where it left off');
+    } else {
+      console.log('🆕 Auth User: Starting fresh behavioral data collection');
+      console.log('📊 All behavioral metrics tracking initialized');
+    }
+    
+    // Log what behavioral metrics are being tracked
+    console.log('🎯 Active behavioral metrics:');
+    console.log('   • Mouse movements and speeds');
+    console.log('   • Keyboard patterns and timing');
+    console.log('   • Click events and timing');
+    console.log('   • Scroll behavior');
+    console.log('   • Cursor angles and entropy');
+    console.log('   • Device fingerprinting');
+    console.log('   • Timing metrics and latency');
+    console.log('   • Idle time and activity patterns');
+    
+    return () => {
+      delete window.clearAuthBehavioralData;
+    };
+  }, []);
 
   function getWebGLFingerprint() {
     const canvas = document.createElement("canvas");
@@ -249,7 +446,6 @@ const Authenticate_user = () => {
     detectUnusualScreenResolution();
   }, []);
 
-  // Add this near the top, with your other useEffects
 useEffect(() => {
   const handleMouseMoveHover = (e) => {
     const target = e.target;
@@ -885,7 +1081,13 @@ useEffect(() => {
   }, [setIdleTime]);
 
   useEffect(() => {
-    setPageLoadTime(Date.now());
+    // Only set pageLoadTime if it's not already set (first time load, not refresh)
+    if (!pageLoadTime) {
+      setPageLoadTime(Date.now());
+      console.log('🆕 Auth User: First time load - starting behavioral metrics collection');
+    } else {
+      console.log('🔄 Auth User: Page refreshed - continuing behavioral metrics from where left off');
+    }
 
     // Timing & Latency Analysis
     const metrics = {};
@@ -1951,10 +2153,10 @@ useEffect(() => {
           const dx = newPoint.x - prevPoint.x;
           const dy = newPoint.y - prevPoint.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          // Reduced threshold to capture more natural movement
+          
           if (dist < 5) return prev;
         }
-        return [...prev.slice(-50), newPoint]; // Store more points
+        return [...prev.slice(-500), newPoint]; 
       });
 
       setLastMouseMove(newPoint);
@@ -2642,7 +2844,7 @@ useEffect(() => {
         </div>
         <div className="navbar-user">
           <span>Admin User</span>
-          <button className="logout-btn">Logout</button>
+          <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </nav>
 
@@ -2818,6 +3020,118 @@ useEffect(() => {
                     <p><strong>Threat Blocked</strong> - Malicious bot attempt prevented</p>
                     <span className="activity-time">12 minutes ago</span>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Behavioral Data Status Panel */}
+            <div className="behavioral-data-section">
+              <h2>🧠 Behavioral Data Status</h2>
+              <div className="behavioral-stats-grid">
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">🖱️</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Mouse Movements</h4>
+                    <p className="behavioral-stat-number">{cursorMovements.length}</p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">⌨️</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Key Presses</h4>
+                    <p className="behavioral-stat-number">{keyPressTimes.length}</p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">🖱️</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Click Events</h4>
+                    <p className="behavioral-stat-number">{clickTimes.length}</p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">📜</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Scroll Events</h4>
+                    <p className="behavioral-stat-number">{scrollSpeeds.length}</p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">🎯</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Cursor Angles</h4>
+                    <p className="behavioral-stat-number">{cursorAngles.length}</p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">⏱️</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Session Duration</h4>
+                    <p className="behavioral-stat-number">
+                      {pageLoadTime ? 
+                        Math.floor((Date.now() - pageLoadTime) / 1000) + 's' : 
+                        'N/A'
+                      }
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="behavioral-stat-card">
+                  <div className="behavioral-stat-icon">💾</div>
+                  <div className="behavioral-stat-info">
+                    <h4>Storage Size</h4>
+                    <p className="behavioral-stat-number">
+                      {localStorage.getItem(BEHAVIORAL_DATA_KEY_AUTH) ? 
+                        (localStorage.getItem(BEHAVIORAL_DATA_KEY_AUTH).length / 1024).toFixed(2) + ' KB' : 
+                        '0 KB'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="behavioral-controls">
+                <div className="behavioral-status">
+                  <span className="status-indicator active"></span>
+                  <span>
+                    {pageLoadTime && savedData && Object.keys(savedData).length > 0 ? 
+                      'Session continued from previous visit ✅' : 
+                      'New session started - metrics collecting ✅'
+                    }
+                  </span>
+                </div>
+                <div className="behavioral-info">
+                  <small style={{ color: '#6b7280' }}>
+                    📊 Behavioral metrics persist across page refreshes until logout
+                    {pageLoadTime && (
+                      <span> • Session started: {new Date(pageLoadTime).toLocaleTimeString()}</span>
+                    )}
+                  </small>
+                </div>
+                <div className="behavioral-actions">
+                  <button 
+                    onClick={clearBehavioralData} 
+                    className="action-btn danger"
+                  >
+                    🧹 Clear Data
+                  </button>
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    className="action-btn secondary"
+                  >
+                    🔄 Test Refresh
+                  </button>
+                  <button 
+                    onClick={handleLogout} 
+                    className="action-btn warning"
+                  >
+                    🚪 Logout & Clear
+                  </button>
                 </div>
               </div>
             </div>
@@ -3145,6 +3459,176 @@ useEffect(() => {
           font-size: 1.1rem;
         }
 
+        /* Behavioral Data Section Styles */
+        .behavioral-data-section {
+          background: white;
+          border-radius: 12px;
+          padding: 2rem;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+          margin-bottom: 2rem;
+          border: 1px solid #e1e8ed;
+        }
+
+        .behavioral-data-section h2 {
+          color: #1e293b;
+          margin-bottom: 1.5rem;
+          font-size: 1.25rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .behavioral-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .behavioral-stat-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          transition: all 0.2s ease;
+        }
+
+        .behavioral-stat-card:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .behavioral-stat-icon {
+          font-size: 1.5rem;
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: white;
+          border-radius: 6px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .behavioral-stat-info h4 {
+          margin: 0 0 0.25rem 0;
+          color: #374151;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .behavioral-stat-number {
+          margin: 0;
+          color: #1e293b;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .behavioral-controls {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 1.5rem;
+          border-top: 1px solid #e2e8f0;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+
+        .behavioral-status {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #374151;
+          font-size: 0.875rem;
+        }
+
+        .status-indicator {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10b981;
+          animation: pulse 2s infinite;
+        }
+
+        .status-indicator.active {
+          background: #10b981;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        .behavioral-actions {
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+
+        .action-btn {
+          padding: 0.5rem 1rem;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .action-btn.primary {
+          background: #3b82f6;
+          color: white;
+          border-color: #3b82f6;
+        }
+
+        .action-btn.secondary {
+          background: #6b7280;
+          color: white;
+          border-color: #6b7280;
+        }
+
+        .action-btn.danger {
+          background: #ef4444;
+          color: white;
+          border-color: #ef4444;
+        }
+
+        .action-btn.warning {
+          background: #f59e0b;
+          color: white;
+          border-color: #f59e0b;
+        }
+
+        .action-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .action-btn.primary:hover {
+          background: #2563eb;
+        }
+
+        .action-btn.secondary:hover {
+          background: #4b5563;
+        }
+
+        .action-btn.danger:hover {
+          background: #dc2626;
+        }
+
+        .action-btn.warning:hover {
+          background: #d97706;
+        }
+
         @media (max-width: 768px) {
           .dashboard {
             position: relative;
@@ -3182,5 +3666,8 @@ useEffect(() => {
     </div>
   );
 };
+
+// Export function to clear behavioral data (can be called from other components when user logs out)
+export const clearStoredAuthBehavioralData = clearBehavioralData;
 
 export default Authenticate_user;

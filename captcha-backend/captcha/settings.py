@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'captchaApp',
-    'httpbot_detector'
+    'httpbot_detector',
+    'user',  # Added user app for custom authentication models
 ]
 
 MIDDLEWARE = [

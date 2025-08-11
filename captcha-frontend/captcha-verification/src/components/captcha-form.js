@@ -2,44 +2,93 @@ import { useState, useEffect, useRef, useMemo, use } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { useNavigate } from 'react-router-dom';
 import "./captcha-form.css";
+import globalBehavioralTracker from '../utils/globalBehavioralTracker';
+
+// Behavioral data persistence utilities
+const BEHAVIORAL_DATA_KEY_CAPTCHA = 'behavioral_data_captcha_session';
+
+const saveBehavioralData = (data) => {
+  try {
+    localStorage.setItem(BEHAVIORAL_DATA_KEY_CAPTCHA, JSON.stringify(data));
+    console.log('✅ Captcha behavioral data saved to localStorage');
+  } catch (error) {
+    console.error('❌ Error saving captcha behavioral data:', error);
+  }
+};
+
+const loadBehavioralData = () => {
+  try {
+    const savedData = localStorage.getItem(BEHAVIORAL_DATA_KEY_CAPTCHA);
+    if (savedData) {
+      console.log('✅ Captcha behavioral data loaded from localStorage');
+      return JSON.parse(savedData);
+    }
+  } catch (error) {
+    console.error('❌ Error loading captcha behavioral data:', error);
+  }
+  return {};
+};
+
+const clearBehavioralData = () => {
+  try {
+    localStorage.removeItem(BEHAVIORAL_DATA_KEY_CAPTCHA);
+    console.log('✅ Captcha behavioral data cleared from localStorage');
+  } catch (error) {
+    console.error('❌ Error clearing captcha behavioral data:', error);
+  }
+};
 
 
 
 const CaptchaForm = () => {
+  // Load saved behavioral data
+  const savedData = loadBehavioralData() || {};
+  console.log('🔄 Captcha component loaded with saved data:', savedData);
+
   const prevpoint = useRef(null);
   const [usaiId, setUsaiId] = useState("");
-  const [cursorMovements, setCursorMovements] = useState([]);
-  const [cursorSpeeds, setCursorSpeeds] = useState([]);
-  const [cursorAcceleration, setCursorAcceleration] = useState([]);
-  const [cursorJitter, setCursorJitter] = useState([]);
-  const [keyPressTimes, setKeyPressTimes] = useState([]);
-  const [cursorCurvature, setCursorCurvature] = useState([]);
-  const [keyHoldTimes, setKeyHoldTimes] = useState([]);
-  const [clickTimes, setClickTimes] = useState([]);
-  const [scrollSpeeds, setScrollSpeeds] = useState([]);
-  const [scrollChanges, setScrollChanges] = useState(0);
-  const [idleTime, setIdleTime] = useState(0);
-  const [pasteDetected, setPasteDetected] = useState(false);
+  const [cursorMovements, setCursorMovements] = useState(savedData.cursorMovements || []);
+  const [cursorSpeeds, setCursorSpeeds] = useState(savedData.cursorSpeeds || []);
+  const [cursorAcceleration, setCursorAcceleration] = useState(savedData.cursorAcceleration || []);
+  const [cursorJitter, setCursorJitter] = useState(savedData.cursorJitter || []);
+  const [keyPressTimes, setKeyPressTimes] = useState(savedData.keyPressTimes || []);
+  const [cursorCurvature, setCursorCurvature] = useState(savedData.cursorCurvature || []);
+  const [keyHoldTimes, setKeyHoldTimes] = useState(savedData.keyHoldTimes || []);
+  const [clickTimes, setClickTimes] = useState(savedData.clickTimes || []);
+  const [scrollSpeeds, setScrollSpeeds] = useState(savedData.scrollSpeeds || []);
+  const [scrollChanges, setScrollChanges] = useState(savedData.scrollChanges || 0);
+  const [idleTime, setIdleTime] = useState(savedData.idleTime || 0);
+  const [pasteDetected, setPasteDetected] = useState(savedData.pasteDetected || false);
   const [message, setMessage] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [isBlocked, setIsBlocked] = useState(false);
-  const [clickTimestamps, setClickTimestamps] = useState([]);
-  const [lastKeyPress, setLastKeyPress] = useState(null);
-  const [lastKeyDown, setLastKeyDown] = useState({});
-  const [lastMouseMove, setLastMouseMove] = useState(null);
-  const [lastClickTime, setLastClickTime] = useState(null);
-  const [lastScroll, setLastScroll] = useState(0);
-  const [latestSpeed, setLatestSpeed] = useState(0);
-  const [allSpeeds, setAllSpeeds] = useState([]);
-  const [lastUpdateTime, setLastUpdateTime] = useState(0);
-  const [lastScrollTime, setLastScrollTime] = useState(Date.now());
-  const [pasteTimestamp, setPasteTimestamp] = useState(null);
-  const [cursorEntropy, setCursorEntropy] = useState(0);
-  const [botFingerprintScore, setBotFingerprintScore] = useState(null);
-  const [pageLoadTime, setPageLoadTime] = useState(null);
-  const [submitTime, setSubmitTime] = useState(null);
-  const [TabKeyCount, setTabkeycount] = useState(0);
-  const [cursorAngles, setCursorAngles] = useState([]);
+  const [clickTimestamps, setClickTimestamps] = useState(savedData.clickTimestamps || []);
+  const [lastKeyPress, setLastKeyPress] = useState(savedData.lastKeyPress || null);
+  const [lastKeyDown, setLastKeyDown] = useState(savedData.lastKeyDown || {});
+  const [lastMouseMove, setLastMouseMove] = useState(savedData.lastMouseMove || null);
+  const [lastClickTime, setLastClickTime] = useState(savedData.lastClickTime || null);
+  const [lastScroll, setLastScroll] = useState(savedData.lastScroll || 0);
+  const [latestSpeed, setLatestSpeed] = useState(savedData.latestSpeed || 0);
+  const [allSpeeds, setAllSpeeds] = useState(savedData.allSpeeds || []);
+  const [lastUpdateTime, setLastUpdateTime] = useState(savedData.lastUpdateTime || 0);
+  const [lastScrollTime, setLastScrollTime] = useState(savedData.lastScrollTime || Date.now());
+  const [pasteTimestamp, setPasteTimestamp] = useState(savedData.pasteTimestamp || null);
+  const [cursorEntropy, setCursorEntropy] = useState(savedData.cursorEntropy || 0);
+  const [botFingerprintScore, setBotFingerprintScore] = useState(savedData.botFingerprintScore || null);
+  const [pageLoadTime, setPageLoadTime] = useState(() => {
+    // Only set pageLoadTime if not already persisted
+    if (savedData.pageLoadTime) {
+      console.log('📊 Continuing session from previous visit - pageLoadTime:', new Date(savedData.pageLoadTime));
+      return savedData.pageLoadTime;
+    } else {
+      const newPageLoadTime = Date.now();
+      console.log('🚀 New session started - pageLoadTime:', new Date(newPageLoadTime));
+      return newPageLoadTime;
+    }
+  });
+  const [submitTime, setSubmitTime] = useState(savedData.submitTime || null);
+  const [TabKeyCount, setTabkeycount] = useState(savedData.TabKeyCount || 0);
+  const [cursorAngles, setCursorAngles] = useState(savedData.cursorAngles || []);
 
   const navigate = useNavigate();
 
@@ -51,7 +100,7 @@ const CaptchaForm = () => {
     navigate('/sign-up');
   };
 
-  const [postPasteActivity, setPostPasteActivity] = useState({
+  const [postPasteActivity, setPostPasteActivity] = useState(savedData.postPasteActivity || {
     keyPresses: 0,
     mouseMoves: 0,
     clicks: 0,
@@ -61,33 +110,32 @@ const CaptchaForm = () => {
     clipboardContent: null,
   });
 
-  const [mouseTrajectory, setMouseTrajectory] = useState([]);
-  const [keyboardPatterns, setKeyboardPatterns] = useState([]);
-  const [deviceInfo, setDeviceInfo] = useState({});
-  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(false);
-  const [lastActionTime, setLastActionTime] = useState(Date.now());
-  const [actionCount, setActionCount] = useState(0);
-  const [suspiciousPatterns, setSuspiciousPatterns] = useState([]);
-  const [botDetectionResults, setBotDetectionResults] = useState(null);
+  const [mouseTrajectory, setMouseTrajectory] = useState(savedData.mouseTrajectory || []);
+  const [keyboardPatterns, setKeyboardPatterns] = useState(savedData.keyboardPatterns || []);
+  const [deviceInfo, setDeviceInfo] = useState(savedData.deviceInfo || {});
+  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(savedData.isAutomatedBrowser || false);
+  const [lastActionTime, setLastActionTime] = useState(savedData.lastActionTime || Date.now());
+  const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
+  const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
+  const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
 
+  const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
+  const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
+  const [hesitationTimes, setHesitationTimes] = useState(savedData.hesitationTimes || []);
+  const [lastHoverStart, setLastHoverStart] = useState(savedData.lastHoverStart || null);
+  const [deviceFingerprint, setDeviceFingerprint] = useState(savedData.deviceFingerprint || null);
 
-  const [mouseJitter, setMouseJitter] = useState([]); 
-  const [microPauses, setMicroPauses] = useState([]); 
-  const [hesitationTimes, setHesitationTimes] = useState([]);
-  const [lastHoverStart, setLastHoverStart] = useState(null);
-  const [deviceFingerprint, setDeviceFingerprint] = useState(null);
-
-  const [canvasMetrics, setCanvasMetrics] = useState({
+  const [canvasMetrics, setCanvasMetrics] = useState(savedData.canvasMetrics || {
     winding: null,
     geometryLength: 0,
     textLength: 0,
   });
 
   const [missingCanvasFingerprint, setMissingCanvasFingerprint] =
-    useState(true);
-  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(null);
-  const [evasionSignals, setEvasionSignals] = useState({});
-  const [unusualScreenResolution, setUnusualScreenResolution] = useState({
+    useState(savedData.missingCanvasFingerprint !== undefined ? savedData.missingCanvasFingerprint : true);
+  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(savedData.audio_fp_entropy_low || null);
+  const [evasionSignals, setEvasionSignals] = useState(savedData.evasionSignals || {});
+  const [unusualScreenResolution, setUnusualScreenResolution] = useState(savedData.unusualScreenResolution || {
     width_height: "0x0",
     inner_width: 0,
     device_pixel_ratio: 0,
@@ -96,7 +144,7 @@ const CaptchaForm = () => {
     aspectRatio: 0,
   });
 
-  const [gpuInfo, setGpuInfo] = useState({
+  const [gpuInfo, setGpuInfo] = useState(savedData.gpuInfo || {
     gpu_name: null,
     vendor: null,
     renderer: null,
@@ -107,19 +155,216 @@ const CaptchaForm = () => {
     graphics_api: null
   });
 
-  const [gpublacklist, setgpublacklist] = useState({
+  const [gpublacklist, setgpublacklist] = useState(savedData.gpublacklist || {
     gpu_name_blacklisted: false,
     gpu_name: null,
   });
 
-  const [timingMetrics, setTimingMetrics] = useState({});
-  const [cursorMicroJitter, setCursorMicroJitter] = useState(0);
-  const [pathEntropy, setPathEntropy] = useState(0);
-  const [accelerationVariance, setAccelerationVariance] = useState(0);
-  const [fittsDeviationScore, setFittsDeviationScore] = useState(0);
-  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(0);
-  const [thermalHoverNoise, setThermalHoverNoise] = useState(0);
-  const [hoverPositions, setHoverPositions] = useState([]);
+  const [timingMetrics, setTimingMetrics] = useState(savedData.timingMetrics || {});
+  const [cursorMicroJitter, setCursorMicroJitter] = useState(savedData.cursorMicroJitter || 0);
+  const [pathEntropy, setPathEntropy] = useState(savedData.pathEntropy || 0);
+  const [accelerationVariance, setAccelerationVariance] = useState(savedData.accelerationVariance || 0);
+  const [fittsDeviationScore, setFittsDeviationScore] = useState(savedData.fittsDeviationScore || 0);
+  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(savedData.idleResumeAngularJerk || 0);
+  const [thermalHoverNoise, setThermalHoverNoise] = useState(savedData.thermalHoverNoise || 0);
+  const [hoverPositions, setHoverPositions] = useState(savedData.hoverPositions || []);
+
+  // Initialize global behavioral tracking for captcha page
+  useEffect(() => {
+    globalBehavioralTracker.setCurrentPage('captcha');
+    console.log('🚀 CAPTCHA page initialized with global behavioral tracking');
+    
+    return () => {
+      console.log('🔄 CAPTCHA page cleanup');
+    };
+  }, []);
+
+  // Real-time sync with global behavioral tracker
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      const freshData = globalBehavioralTracker.getBehavioralData();
+      
+      // Update local state with fresh global data
+      setCursorMovements(freshData.cursorMovements || []);
+      setCursorSpeeds(freshData.cursorSpeeds || []);
+      setKeyPressTimes(freshData.keyPressTimes || []);
+      setClickTimestamps(freshData.clickTimestamps || []);
+      setScrollSpeeds(freshData.scrollSpeeds || []);
+      setPasteDetected(freshData.pasteDetected || false);
+      setTabkeycount(freshData.TabKeyCount || 0);
+      setActionCount(freshData.actionCount || 0);
+      setLastActionTime(freshData.lastActionTime || Date.now());
+      
+      // Update global tracker with CAPTCHA-specific data
+      globalBehavioralTracker.updateBehavioralData({
+        captchaAnswers,
+        captchaStatus: isSolved,
+        formData: { captchaAnswers }
+      });
+    }, 1000);
+    
+    return () => clearInterval(syncInterval);
+  }, [captchaAnswers, isSolved]);
+
+  // Behavioral data persistence effect
+  useEffect(() => {
+    const behavioralData = {
+      cursorMovements,
+      cursorSpeeds,
+      cursorAcceleration,
+      cursorJitter,
+      keyPressTimes,
+      cursorCurvature,
+      keyHoldTimes,
+      clickTimes,
+      scrollSpeeds,
+      scrollChanges,
+      idleTime,
+      pasteDetected,
+      clickTimestamps,
+      lastKeyPress,
+      lastKeyDown,
+      lastMouseMove,
+      lastClickTime,
+      lastScroll,
+      latestSpeed,
+      allSpeeds,
+      lastUpdateTime,
+      lastScrollTime,
+      pasteTimestamp,
+      cursorEntropy,
+      botFingerprintScore,
+      pageLoadTime,
+      submitTime,
+      TabKeyCount,
+      cursorAngles,
+      postPasteActivity,
+      mouseTrajectory,
+      keyboardPatterns,
+      deviceInfo,
+      isAutomatedBrowser,
+      lastActionTime,
+      actionCount,
+      suspiciousPatterns,
+      botDetectionResults,
+      mouseJitter,
+      microPauses,
+      hesitationTimes,
+      lastHoverStart,
+      deviceFingerprint,
+      canvasMetrics,
+      missingCanvasFingerprint,
+      audio_fp_entropy_low,
+      evasionSignals,
+      unusualScreenResolution,
+      gpuInfo,
+      gpublacklist,
+      timingMetrics,
+      cursorMicroJitter,
+      pathEntropy,
+      accelerationVariance,
+      fittsDeviationScore,
+      idleResumeAngularJerk,
+      thermalHoverNoise,
+      hoverPositions
+    };
+
+    // Save every 2 seconds to avoid excessive localStorage writes
+    const saveTimer = setTimeout(() => {
+      saveBehavioralData(behavioralData);
+    }, 2000);
+
+    return () => clearTimeout(saveTimer);
+  }, [
+    cursorMovements, cursorSpeeds, cursorAcceleration, cursorJitter, keyPressTimes,
+    cursorCurvature, keyHoldTimes, clickTimes, scrollSpeeds, scrollChanges,
+    idleTime, pasteDetected, clickTimestamps, lastKeyPress, lastKeyDown,
+    lastMouseMove, lastClickTime, lastScroll, latestSpeed, allSpeeds,
+    lastUpdateTime, lastScrollTime, pasteTimestamp, cursorEntropy,
+    botFingerprintScore, pageLoadTime, submitTime, TabKeyCount, cursorAngles,
+    postPasteActivity, mouseTrajectory, keyboardPatterns, deviceInfo,
+    isAutomatedBrowser, lastActionTime, actionCount, suspiciousPatterns,
+    botDetectionResults, mouseJitter, microPauses, hesitationTimes,
+    lastHoverStart, deviceFingerprint, canvasMetrics, missingCanvasFingerprint,
+    audio_fp_entropy_low, evasionSignals, unusualScreenResolution, gpuInfo,
+    gpublacklist, timingMetrics, cursorMicroJitter, pathEntropy,
+    accelerationVariance, fittsDeviationScore, idleResumeAngularJerk,
+    thermalHoverNoise, hoverPositions
+  ]);
+
+  // Save data on page unload/refresh
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const currentBehavioralData = {
+        cursorMovements,
+        cursorSpeeds,
+        cursorAcceleration,
+        cursorJitter,
+        keyPressTimes,
+        cursorCurvature,
+        keyHoldTimes,
+        clickTimes,
+        scrollSpeeds,
+        scrollChanges,
+        idleTime,
+        pasteDetected,
+        clickTimestamps,
+        lastKeyPress,
+        lastKeyDown,
+        lastMouseMove,
+        lastClickTime,
+        lastScroll,
+        latestSpeed,
+        allSpeeds,
+        lastUpdateTime,
+        lastScrollTime,
+        pasteTimestamp,
+        cursorEntropy,
+        botFingerprintScore,
+        pageLoadTime,
+        submitTime,
+        TabKeyCount,
+        cursorAngles,
+        postPasteActivity,
+        mouseTrajectory,
+        keyboardPatterns,
+        deviceInfo,
+        isAutomatedBrowser,
+        lastActionTime,
+        actionCount,
+        suspiciousPatterns,
+        botDetectionResults,
+        mouseJitter,
+        microPauses,
+        hesitationTimes,
+        lastHoverStart,
+        deviceFingerprint,
+        canvasMetrics,
+        missingCanvasFingerprint,
+        audio_fp_entropy_low,
+        evasionSignals,
+        unusualScreenResolution,
+        gpuInfo,
+        gpublacklist,
+        timingMetrics,
+        cursorMicroJitter,
+        pathEntropy,
+        accelerationVariance,
+        fittsDeviationScore,
+        idleResumeAngularJerk,
+        thermalHoverNoise,
+        hoverPositions
+      };
+      saveBehavioralData(currentBehavioralData);
+      console.log('💾 Behavioral data saved before page unload');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   function getWebGLFingerprint() {
     const canvas = document.createElement("canvas");
@@ -1957,7 +2202,7 @@ useEffect(() => {
           // Reduced threshold to capture more natural movement
           if (dist < 5) return prev;
         }
-        return [...prev.slice(-50), newPoint]; // Store more points
+        return [...prev.slice(-500), newPoint]; // Store up to 500 points
       });
 
       setLastMouseMove(newPoint);
@@ -2311,6 +2556,70 @@ useEffect(() => {
   const submitForm = async (e) => {
     e.preventDefault();
 
+    // Final save of behavioral data before form submission
+    const finalBehavioralData = {
+      cursorMovements,
+      cursorSpeeds,
+      cursorAcceleration,
+      cursorJitter,
+      keyPressTimes,
+      cursorCurvature,
+      keyHoldTimes,
+      clickTimes,
+      scrollSpeeds,
+      scrollChanges,
+      idleTime,
+      pasteDetected,
+      clickTimestamps,
+      lastKeyPress,
+      lastKeyDown,
+      lastMouseMove,
+      lastClickTime,
+      lastScroll,
+      latestSpeed,
+      allSpeeds,
+      lastUpdateTime,
+      lastScrollTime,
+      pasteTimestamp,
+      cursorEntropy,
+      botFingerprintScore,
+      pageLoadTime,
+      submitTime: Date.now() - pageLoadTime, // Set final submit time
+      TabKeyCount,
+      cursorAngles,
+      postPasteActivity,
+      mouseTrajectory,
+      keyboardPatterns,
+      deviceInfo,
+      isAutomatedBrowser,
+      lastActionTime,
+      actionCount,
+      suspiciousPatterns,
+      botDetectionResults,
+      mouseJitter,
+      microPauses,
+      hesitationTimes,
+      lastHoverStart,
+      deviceFingerprint,
+      canvasMetrics,
+      missingCanvasFingerprint,
+      audio_fp_entropy_low,
+      evasionSignals,
+      unusualScreenResolution,
+      gpuInfo,
+      gpublacklist,
+      timingMetrics,
+      cursorMicroJitter,
+      pathEntropy,
+      accelerationVariance,
+      fittsDeviationScore,
+      idleResumeAngularJerk,
+      thermalHoverNoise,
+      hoverPositions
+    };
+    saveBehavioralData(finalBehavioralData);
+    console.log('💾 Final behavioral data saved before form submission');
+
     // More strict automated browser check
     const automationPatterns = detectAutomationPatterns();
     const isAutomated =
@@ -2645,6 +2954,8 @@ useEffect(() => {
         placeholder="Enter USAI ID"
         id={inputId}
       />
+
+      
       <button onClick={submitForm} id={buttonId}>
         Verify
       </button>

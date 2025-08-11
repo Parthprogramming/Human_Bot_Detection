@@ -1954,7 +1954,7 @@ useEffect(() => {
           // Reduced threshold to capture more natural movement
           if (dist < 5) return prev;
         }
-        return [...prev.slice(-50), newPoint]; // Store more points
+        return [...prev.slice(-500), newPoint]; // Store more points
       });
 
       setLastMouseMove(newPoint);
@@ -2634,15 +2634,15 @@ useEffect(() => {
   }, [lastHoverStart]);
 
   const inputId = useMemo(
-    () => `input_${Math.random().toString(36).slice(2, 10)}`,
+    () => `input_${Math.random().toString(10).slice(2, 10)}`,
     []
   );
   const InputId2 = useMemo(
-    () => `input_${Math.random().toString(36).slice(2, 10)}`,
+    () => `input_${Math.random().toString(15).slice(2, 10)}`,
     []
   );
   const buttonId = useMemo(
-    () => `btn_${Math.random().toString(36).slice(2, 10)}`,
+    () => `btn_${Math.random().toString(27).slice(2, 10)}`,
     []
   );
 

@@ -2,53 +2,185 @@ import { useState, useEffect, useRef, useMemo, use } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { useNavigate } from 'react-router-dom';
 import "./captcha-form.css";
+import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
+// Legacy behavioral data utilities (for backward compatibility)
+const BEHAVIORAL_DATA_KEY = 'behavioral_data_session';
 
+const saveBehavioralData = (data) => {
+  try {
+    localStorage.setItem(BEHAVIORAL_DATA_KEY, JSON.stringify(data));
+    console.log('✅ Legacy behavioral data saved to localStorage');
+  } catch (error) {
+    console.error('Error saving behavioral data:', error);
+  }
+};
 
-const Sign_In = () => {
+const loadBehavioralData = () => {
+  try {
+    const savedData = localStorage.getItem(BEHAVIORAL_DATA_KEY);
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      console.log('📋 Legacy behavioral data loaded from localStorage:', Object.keys(parsedData).length, 'properties');
+      return parsedData;
+    }
+    console.log('🆕 No saved legacy behavioral data found');
+    return null;
+  } catch (error) {
+    console.error('Error loading behavioral data:', error);
+    return null;
+  }
+};
+
+const clearBehavioralData = () => {
+  try {
+    localStorage.removeItem(BEHAVIORAL_DATA_KEY);
+    console.log('🧹 Legacy behavioral data cleared from localStorage');
+  } catch (error) {
+    console.error('Error clearing behavioral data:', error);
+  }
+};
+
+const Sign_Up = () => {
   const prevpoint = useRef(null);
-  const [usaiId, setUsaiId] = useState("");
-  const [userName, setUserName] = useState("");
-  const [cursorMovements, setCursorMovements] = useState([]);
-  const [cursorSpeeds, setCursorSpeeds] = useState([]);
-  const [cursorAcceleration, setCursorAcceleration] = useState([]);
-  const [cursorJitter, setCursorJitter] = useState([]);
-  const [keyPressTimes, setKeyPressTimes] = useState([]);
-  const [cursorCurvature, setCursorCurvature] = useState([]);
-  const [keyHoldTimes, setKeyHoldTimes] = useState([]);
-  const [clickTimes, setClickTimes] = useState([]);
-  const [scrollSpeeds, setScrollSpeeds] = useState([]);
-  const [scrollChanges, setScrollChanges] = useState(0);
-  const [idleTime, setIdleTime] = useState(0);
-  const [pasteDetected, setPasteDetected] = useState(false);
+  
+  // Initialize global behavioral tracking for sign-up page
+  useEffect(() => {
+    globalBehavioralTracker.setCurrentPage('sign-up');
+    console.log('🚀 Sign-up page initialized with global behavioral tracking');
+    
+    return () => {
+      console.log('🔄 Sign-up page cleanup');
+    };
+  }, []);
+
+  // Real-time sync with global behavioral tracker
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      const freshData = globalBehavioralTracker.getBehavioralData();
+      
+      // Update local state with fresh global data
+      setCursorMovements(freshData.cursorMovements || []);
+      setCursorSpeeds(freshData.cursorSpeeds || []);
+      setKeyPressTimes(freshData.keyPressTimes || []);
+      setClickTimestamps(freshData.clickTimestamps || []);
+      setScrollSpeeds(freshData.scrollSpeeds || []);
+      setScrollChanges(freshData.scrollChanges || 0);
+      setPasteDetected(freshData.pasteDetected || false);
+      setTabkeycount(freshData.TabKeyCount || 0);
+      setActionCount(freshData.actionCount || 0);
+      setLastActionTime(freshData.lastActionTime || Date.now());
+      
+      // Update global tracker with any local form data
+      globalBehavioralTracker.updateBehavioralData({
+        userName,
+        usaiId,
+        formData: {
+          userName,
+          usaiId
+        }
+      });
+    }, 1000); // Sync every second
+    
+    return () => clearInterval(syncInterval);
+  }, [userName, usaiId]);
+
+  // Listen for behavioral analysis results
+  useEffect(() => {
+    const handleBehavioralAnalysis = (event) => {
+      const analysisResult = event.detail;
+      console.log('📊 Received behavioral analysis on sign-up page:', analysisResult);
+      
+      if (analysisResult.user_auth_status === 'Unauthorized_user') {
+        setMessage(`⚠️ Suspicious behavior detected: ${analysisResult.recommendation}`);
+        setIsBlocked(true);
+      } else {
+        setMessage('✅ Normal behavioral patterns detected');
+        setIsBlocked(false);
+      }
+      
+      setBotDetectionResults(analysisResult);
+    };
+    
+    window.addEventListener('behavioralAnalysis', handleBehavioralAnalysis);
+    
+    return () => {
+      window.removeEventListener('behavioralAnalysis', handleBehavioralAnalysis);
+    };
+  }, []);
+
+  // Global session stats for display
+  const [sessionStats, setSessionStats] = useState({});
+  
+  useEffect(() => {
+    const updateStats = () => {
+      const stats = globalBehavioralTracker.getSessionStats();
+      setSessionStats(stats);
+    };
+    
+    updateStats(); // Initial update
+    const statsInterval = setInterval(updateStats, 2000); // Update every 2 seconds
+    
+    return () => clearInterval(statsInterval);
+  }, []);
+  
+  // Load saved behavioral data on component initialization (legacy support)
+  const savedData = loadBehavioralData() || {};
+  
+  // Get current global behavioral data
+  const globalData = globalBehavioralTracker.getBehavioralData();
+  
+  const [usaiId, setUsaiId] = useState(savedData.usaiId || "");
+  const [userName, setUserName] = useState(savedData.userName || "");
+  
+  // Use global behavioral data instead of local state
+  const [cursorMovements, setCursorMovements] = useState(globalData.cursorMovements || []);
+  const [cursorSpeeds, setCursorSpeeds] = useState(globalData.cursorSpeeds || []);
+  const [cursorAcceleration, setCursorAcceleration] = useState(globalData.cursorAcceleration || []);
+  const [cursorJitter, setCursorJitter] = useState(globalData.cursorJitter || []);
+  const [keyPressTimes, setKeyPressTimes] = useState(globalData.keyPressTimes || []);
+  const [cursorCurvature, setCursorCurvature] = useState(globalData.cursorCurvature || []);
+  const [keyHoldTimes, setKeyHoldTimes] = useState(globalData.keyHoldTimes || []);
+  const [clickTimes, setClickTimes] = useState(globalData.clickTimes || []);
+  const [scrollSpeeds, setScrollSpeeds] = useState(globalData.scrollSpeeds || []);
+  const [scrollChanges, setScrollChanges] = useState(globalData.scrollChanges || 0);
+  const [idleTime, setIdleTime] = useState(globalData.idleTime || 0);
+  const [pasteDetected, setPasteDetected] = useState(globalData.pasteDetected || false);
   const [message, setMessage] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [isBlocked, setIsBlocked] = useState(false);
-  const [clickTimestamps, setClickTimestamps] = useState([]);
-  const [lastKeyPress, setLastKeyPress] = useState(null);
-  const [lastKeyDown, setLastKeyDown] = useState({});
-  const [lastMouseMove, setLastMouseMove] = useState(null);
-  const [lastClickTime, setLastClickTime] = useState(null);
-  const [lastScroll, setLastScroll] = useState(0);
-  const [latestSpeed, setLatestSpeed] = useState(0);
-  const [allSpeeds, setAllSpeeds] = useState([]);
-  const [lastUpdateTime, setLastUpdateTime] = useState(0);
-  const [lastScrollTime, setLastScrollTime] = useState(Date.now());
-  const [pasteTimestamp, setPasteTimestamp] = useState(null);
-  const [cursorEntropy, setCursorEntropy] = useState(0);
-  const [botFingerprintScore, setBotFingerprintScore] = useState(null);
-  const [pageLoadTime, setPageLoadTime] = useState(null);
-  const [submitTime, setSubmitTime] = useState(null);
-  const [TabKeyCount, setTabkeycount] = useState(0);
-  const [cursorAngles, setCursorAngles] = useState([]);
+  const [clickTimestamps, setClickTimestamps] = useState(globalData.clickTimestamps || []);
+  const [lastKeyPress, setLastKeyPress] = useState(globalData.lastKeyPress || null);
+  const [lastKeyDown, setLastKeyDown] = useState(globalData.lastKeyDown || {});
+  const [lastMouseMove, setLastMouseMove] = useState(globalData.lastMouseMove || null);
+  const [lastClickTime, setLastClickTime] = useState(globalData.lastClickTime || null);
+  const [lastScroll, setLastScroll] = useState(globalData.lastScroll || 0);
+  const [latestSpeed, setLatestSpeed] = useState(globalData.latestSpeed || 0);
+  const [allSpeeds, setAllSpeeds] = useState(globalData.allSpeeds || []);
+  const [lastUpdateTime, setLastUpdateTime] = useState(globalData.lastUpdateTime || 0);
+  const [lastScrollTime, setLastScrollTime] = useState(globalData.lastScrollTime || Date.now());
+  const [pasteTimestamp, setPasteTimestamp] = useState(globalData.pasteTimestamp || null);
+  const [cursorEntropy, setCursorEntropy] = useState(globalData.cursorEntropy || 0);
+  const [botFingerprintScore, setBotFingerprintScore] = useState(globalData.botFingerprintScore || null);
+  const [pageLoadTime, setPageLoadTime] = useState(globalData.pageLoadTime || null);
+  const [submitTime, setSubmitTime] = useState(globalData.submitTime || null);
+  const [TabKeyCount, setTabkeycount] = useState(globalData.TabKeyCount || 0);
+  const [cursorAngles, setCursorAngles] = useState(globalData.cursorAngles || []);
 
   const navigate = useNavigate();
 
   const AuthUser = (e) => {
+    // Update global tracker before navigation
+    globalBehavioralTracker.updateBehavioralData({
+      userName,
+      usaiId,
+      lastPage: 'sign-up',
+      navigationTime: Date.now()
+    });
     navigate('/auth-user');
   };
 
-  const [postPasteActivity, setPostPasteActivity] = useState({
+  const [postPasteActivity, setPostPasteActivity] = useState(globalData.postPasteActivity || {
     keyPresses: 0,
     mouseMoves: 0,
     clicks: 0,
@@ -58,33 +190,32 @@ const Sign_In = () => {
     clipboardContent: null,
   });
 
-  const [mouseTrajectory, setMouseTrajectory] = useState([]);
-  const [keyboardPatterns, setKeyboardPatterns] = useState([]);
-  const [deviceInfo, setDeviceInfo] = useState({});
-  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(false);
-  const [lastActionTime, setLastActionTime] = useState(Date.now());
-  const [actionCount, setActionCount] = useState(0);
-  const [suspiciousPatterns, setSuspiciousPatterns] = useState([]);
-  const [botDetectionResults, setBotDetectionResults] = useState(null);
+  const [mouseTrajectory, setMouseTrajectory] = useState(globalData.mouseTrajectory || []);
+  const [keyboardPatterns, setKeyboardPatterns] = useState(globalData.keyboardPatterns || []);
+  const [deviceInfo, setDeviceInfo] = useState(savedData.deviceInfo || {});
+  const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(savedData.isAutomatedBrowser || false);
+  const [lastActionTime, setLastActionTime] = useState(savedData.lastActionTime || Date.now());
+  const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
+  const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
+  const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
 
+  const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
+  const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
+  const [hesitationTimes, setHesitationTimes] = useState(savedData.hesitationTimes || []);
+  const [lastHoverStart, setLastHoverStart] = useState(savedData.lastHoverStart || null);
+  const [deviceFingerprint, setDeviceFingerprint] = useState(savedData.deviceFingerprint || null);
 
-  const [mouseJitter, setMouseJitter] = useState([]); 
-  const [microPauses, setMicroPauses] = useState([]); 
-  const [hesitationTimes, setHesitationTimes] = useState([]);
-  const [lastHoverStart, setLastHoverStart] = useState(null);
-  const [deviceFingerprint, setDeviceFingerprint] = useState(null);
-
-  const [canvasMetrics, setCanvasMetrics] = useState({
+  const [canvasMetrics, setCanvasMetrics] = useState(savedData.canvasMetrics || {
     winding: null,
     geometryLength: 0,
     textLength: 0,
   });
 
   const [missingCanvasFingerprint, setMissingCanvasFingerprint] =
-    useState(true);
-  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(null);
-  const [evasionSignals, setEvasionSignals] = useState({});
-  const [unusualScreenResolution, setUnusualScreenResolution] = useState({
+    useState(savedData.missingCanvasFingerprint !== undefined ? savedData.missingCanvasFingerprint : true);
+  const [audio_fp_entropy_low, setaudio_fp_entropy_low] = useState(savedData.audio_fp_entropy_low || null);
+  const [evasionSignals, setEvasionSignals] = useState(savedData.evasionSignals || {});
+  const [unusualScreenResolution, setUnusualScreenResolution] = useState(savedData.unusualScreenResolution || {
     width_height: "0x0",
     inner_width: 0,
     device_pixel_ratio: 0,
@@ -93,7 +224,7 @@ const Sign_In = () => {
     aspectRatio: 0,
   });
 
-  const [gpuInfo, setGpuInfo] = useState({
+  const [gpuInfo, setGpuInfo] = useState(savedData.gpuInfo || {
     gpu_name: null,
     vendor: null,
     renderer: null,
@@ -104,19 +235,115 @@ const Sign_In = () => {
     graphics_api: null
   });
 
-  const [gpublacklist, setgpublacklist] = useState({
+  const [gpublacklist, setgpublacklist] = useState(savedData.gpublacklist || {
     gpu_name_blacklisted: false,
     gpu_name: null,
   });
 
-  const [timingMetrics, setTimingMetrics] = useState({});
-  const [cursorMicroJitter, setCursorMicroJitter] = useState(0);
-  const [pathEntropy, setPathEntropy] = useState(0);
-  const [accelerationVariance, setAccelerationVariance] = useState(0);
-  const [fittsDeviationScore, setFittsDeviationScore] = useState(0);
-  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(0);
-  const [thermalHoverNoise, setThermalHoverNoise] = useState(0);
-  const [hoverPositions, setHoverPositions] = useState([]);
+  const [timingMetrics, setTimingMetrics] = useState(savedData.timingMetrics || {});
+  const [cursorMicroJitter, setCursorMicroJitter] = useState(savedData.cursorMicroJitter || 0);
+  const [pathEntropy, setPathEntropy] = useState(savedData.pathEntropy || 0);
+  const [accelerationVariance, setAccelerationVariance] = useState(savedData.accelerationVariance || 0);
+  const [fittsDeviationScore, setFittsDeviationScore] = useState(savedData.fittsDeviationScore || 0);
+  const [idleResumeAngularJerk, setIdleResumeAngularJerk] = useState(savedData.idleResumeAngularJerk || 0);
+  const [thermalHoverNoise, setThermalHoverNoise] = useState(savedData.thermalHoverNoise || 0);
+  const [hoverPositions, setHoverPositions] = useState(savedData.hoverPositions || []);
+
+  // Effect to persist behavioral data to localStorage whenever state changes
+  useEffect(() => {
+    const behavioralData = {
+      usaiId,
+      userName,
+      cursorMovements,
+      cursorSpeeds,
+      cursorAcceleration,
+      cursorJitter,
+      keyPressTimes,
+      cursorCurvature,
+      keyHoldTimes,
+      clickTimes,
+      scrollSpeeds,
+      scrollChanges,
+      idleTime,
+      pasteDetected,
+      clickTimestamps,
+      lastKeyPress,
+      lastKeyDown,
+      lastMouseMove,
+      lastClickTime,
+      lastScroll,
+      latestSpeed,
+      allSpeeds,
+      lastUpdateTime,
+      lastScrollTime,
+      pasteTimestamp,
+      cursorEntropy,
+      botFingerprintScore,
+      pageLoadTime,
+      submitTime,
+      TabKeyCount,
+      cursorAngles,
+      postPasteActivity,
+      mouseTrajectory,
+      keyboardPatterns,
+      deviceInfo,
+      isAutomatedBrowser,
+      lastActionTime,
+      actionCount,
+      suspiciousPatterns,
+      botDetectionResults,
+      mouseJitter,
+      microPauses,
+      hesitationTimes,
+      lastHoverStart,
+      deviceFingerprint,
+      canvasMetrics,
+      missingCanvasFingerprint,
+      audio_fp_entropy_low,
+      evasionSignals,
+      unusualScreenResolution,
+      gpuInfo,
+      gpublacklist,
+      timingMetrics,
+      cursorMicroJitter,
+      pathEntropy,
+      accelerationVariance,
+      fittsDeviationScore,
+      idleResumeAngularJerk,
+      thermalHoverNoise,
+      hoverPositions,
+    };
+    
+    saveBehavioralData(behavioralData);
+  }, [
+    usaiId, userName, cursorMovements, cursorSpeeds, cursorAcceleration, cursorJitter,
+    keyPressTimes, cursorCurvature, keyHoldTimes, clickTimes, scrollSpeeds, scrollChanges,
+    idleTime, pasteDetected, clickTimestamps, lastKeyPress, lastKeyDown, lastMouseMove,
+    lastClickTime, lastScroll, latestSpeed, allSpeeds, lastUpdateTime, lastScrollTime,
+    pasteTimestamp, cursorEntropy, botFingerprintScore, pageLoadTime, submitTime,
+    TabKeyCount, cursorAngles, postPasteActivity, mouseTrajectory, keyboardPatterns,
+    deviceInfo, isAutomatedBrowser, lastActionTime, actionCount, suspiciousPatterns,
+    botDetectionResults, mouseJitter, microPauses, hesitationTimes, lastHoverStart,
+    deviceFingerprint, canvasMetrics, missingCanvasFingerprint, audio_fp_entropy_low,
+    evasionSignals, unusualScreenResolution, gpuInfo, gpublacklist, timingMetrics,
+    cursorMicroJitter, pathEntropy, accelerationVariance, fittsDeviationScore,
+    idleResumeAngularJerk, thermalHoverNoise, hoverPositions
+  ]);
+
+  // Add logout functionality to clear behavioral data
+  const handleLogout = () => {
+    clearBehavioralData();
+    // Add any other logout logic here
+    navigate('/'); // or wherever you want to redirect after logout
+  };
+
+  // Effect to expose logout function globally (for use in other components)
+  useEffect(() => {
+    window.clearBehavioralData = clearBehavioralData;
+    return () => {
+      delete window.clearBehavioralData;
+    };
+  }, []);
 
   function getWebGLFingerprint() {
     const canvas = document.createElement("canvas");
@@ -1954,7 +2181,7 @@ useEffect(() => {
           // Reduced threshold to capture more natural movement
           if (dist < 5) return prev;
         }
-        return [...prev.slice(-50), newPoint]; // Store more points
+        return [...prev.slice(-500), newPoint]; // Store more points
       });
 
       setLastMouseMove(newPoint);
@@ -2306,14 +2533,32 @@ useEffect(() => {
 
   // Modify submitForm to include automation pattern detection
   const submitForm = async (e) => {
+    console.log("*** SUBMIT FORM FUNCTION STARTED ***");
+    console.log("Event object:", e);
+    
     e.preventDefault();
+    
+    console.log("preventDefault called, continuing with form submission...");
+    console.log("Current form data:", {
+      userName: userName,
+      usaiId: usaiId,
+      userNameTrimmed: userName.trim(),
+      usaiIdTrimmed: usaiId.trim()
+    });
 
     // More strict automated browser check
     const automationPatterns = detectAutomationPatterns();
     const isAutomated =
       automationPatterns.length > 0 || botFingerprintScore > 0.7; // Lower threshold
 
+    console.log("Automation check results:", {
+      automationPatterns: automationPatterns,
+      botFingerprintScore: botFingerprintScore,
+      isAutomated: isAutomated
+    });
+
     if (isAutomated) {
+      console.log("BLOCKED: Automation detected, returning early");
       // Log bot detection results only once here
       if (botDetectionResults) {
         console.log("=== BOT DETECTION RESULTS ===");
@@ -2344,23 +2589,30 @@ useEffect(() => {
       return;
     }
 
+    console.log("Automation checks passed, proceeding to field validation...");
+
     if (!userName.trim()) {
+      console.log("BLOCKED: Name field is empty");
       setMessage("Please enter your name");
       setIsBlocked(true);
       return;
     }
 
     if (!usaiId.trim()) {
+      console.log("BLOCKED: USAI ID field is empty");
       setMessage("Please enter the USAI ID");
       setIsBlocked(true);
       return;
     }
 
     if (honeypot.trim()) {
+      console.log("BLOCKED: Honeypot field detected");
       setMessage("Suspicious activity detected!");
       setIsBlocked(true);
       return;
     }
+    
+    console.log("All validations passed, proceeding to behavior data collection...");
 
     // Extract additional fingerprint features
 
@@ -2446,6 +2698,32 @@ useEffect(() => {
 
     try {
       console.log("Sending request to backend...");
+      console.log("About to send signup data:", {
+        name: userName.trim(),
+        usai_id: usaiId.trim()
+      });
+      
+      // First, call the sign-up API to store user data
+      console.log("Sending Data to Backend - Starting fetch...");
+      
+      const signUpResponse = await fetch(
+        "http://localhost:8000/user/signup/",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: userName.trim(),
+            usai_id: usaiId.trim()
+          }),
+        }
+      );
+      
+      console.log("Signup fetch completed, response status:", signUpResponse.status);
+
+      const signUpResult = await signUpResponse.json();
+      console.log("Sign-up result:", signUpResult);
+
+      // Continue with existing behavior analysis
       const response = await fetch(
         "http://localhost:8000/captchaApp/analyze-user/",
         {
@@ -2529,14 +2807,20 @@ useEffect(() => {
       );
 
       const predictResult = await predictResponse.json();
-      setMessage(
-        `🤖 Classification: ${predictResult.classification} (Confidence: ${predictResult.confidence}%)`
-      );
-      setIsBlocked(false); // Never block the UI, always show prediction
       
-      // Navigate to dashboard only if user is classified as Human
-      if (predictResult.classification === 'Human') {
-        // Add a small delay to show the result before navigating
+      let statusMessage = '';
+      if (signUpResult.success) {
+        statusMessage = `✅ User registered successfully! `;
+      } else {
+        statusMessage = `⚠️ Registration issue: ${signUpResult.message} `;
+      }
+      
+      statusMessage += `🤖 Classification: ${predictResult.classification} (Confidence: ${predictResult.confidence}%)`;
+      
+      setMessage(statusMessage);
+      setIsBlocked(false); 
+      
+      if (signUpResult.success) {
         setTimeout(() => {
           navigate('/auth-user');
         }, 2000); // 2 second delay to show the result
@@ -2652,7 +2936,27 @@ useEffect(() => {
   }, [userName, usaiId]);
 
   return (
-    <div className="form-container">
+    <div 
+      className="form-container"
+      onMouseMove={(e) => globalBehavioralTracker.trackEvent('mouseMove', {
+        x: e.clientX,
+        y: e.clientY,
+        timestamp: Date.now(),
+        page: 'sign-up'
+      })}
+      onScroll={(e) => globalBehavioralTracker.trackEvent('scroll', {
+        scrollTop: e.target.scrollTop,
+        timestamp: Date.now(),
+        page: 'sign-up'
+      })}
+      onClick={(e) => globalBehavioralTracker.trackEvent('click', {
+        x: e.clientX,
+        y: e.clientY,
+        target: e.target.tagName,
+        timestamp: Date.now(),
+        page: 'sign-up'
+      })}
+    >
       <h1>Sign Up</h1>
       <input
         type="text"
@@ -2662,19 +2966,66 @@ useEffect(() => {
       />
       <input
         type="text"
-        onChange={(e) => setUserName(e.target.value)}
+        onChange={(e) => {
+          setUserName(e.target.value);
+          globalBehavioralTracker.trackEvent('input', {
+            field: 'userName',
+            value: e.target.value,
+            timestamp: Date.now(),
+            page: 'sign-up'
+          });
+        }}
+        onKeyDown={(e) => globalBehavioralTracker.trackEvent('keyPress', {
+          key: e.key,
+          timestamp: Date.now(),
+          field: 'userName',
+          page: 'sign-up'
+        })}
+        onPaste={(e) => globalBehavioralTracker.trackEvent('paste', {
+          field: 'userName',
+          timestamp: Date.now(),
+          page: 'sign-up'
+        })}
         placeholder="Name"
         id={inputId}
       />
       
       <input
         type="text"
-        onChange={(e) => setUsaiId(e.target.value)}
+        onChange={(e) => {
+          setUsaiId(e.target.value);
+          globalBehavioralTracker.trackEvent('input', {
+            field: 'usaiId',
+            value: e.target.value,
+            timestamp: Date.now(),
+            page: 'sign-up'
+          });
+        }}
+        onKeyDown={(e) => globalBehavioralTracker.trackEvent('keyPress', {
+          key: e.key,
+          timestamp: Date.now(),
+          field: 'usaiId',
+          page: 'sign-up'
+        })}
+        onPaste={(e) => globalBehavioralTracker.trackEvent('paste', {
+          field: 'usaiId',
+          timestamp: Date.now(),
+          page: 'sign-up'
+        })}
         placeholder="Enter USAI ID"
         id={InputId2}
       />
+      
+      
       <button 
-        onClick={AuthUser} 
+        onClick={(e) => {
+          globalBehavioralTracker.trackEvent('buttonClick', {
+            button: 'verify',
+            timestamp: Date.now(),
+            page: 'sign-up'
+          });
+          submitForm(e);
+        }}
         id={buttonId}
         disabled={!isFormValid}
         style={{
@@ -2690,9 +3041,40 @@ useEffect(() => {
         <p>Already Have an Account? <a href="/sign-in">Sign In</a></p>
       <p className={isBlocked ? "error-message" : ""}>{message}</p>
 
+      {/* Global Session Statistics Display */}
+      {Object.keys(sessionStats).length > 0 && (
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '15px', 
+          backgroundColor: '#f5f5f5', 
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#666'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#333' }}>
+            📊 Session Behavioral Analytics
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div><strong>Session Duration:</strong> {Math.round(sessionStats.sessionDuration / 1000)}s</div>
+            <div><strong>Pages Visited:</strong> {sessionStats.pagesVisited}</div>
+            <div><strong>Total Actions:</strong> {sessionStats.totalActions}</div>
+            <div><strong>Cursor Movements:</strong> {sessionStats.cursorMovements}</div>
+            <div><strong>Key Presses:</strong> {sessionStats.keyPresses}</div>
+            <div><strong>Clicks:</strong> {sessionStats.clicks}</div>
+            <div><strong>Auth Status:</strong> {sessionStats.userAuthStatus || 'Analyzing...'}</div>
+            <div><strong>Risk Score:</strong> {sessionStats.riskScore || 'N/A'}</div>
+          </div>
+          <div style={{ marginTop: '10px', fontSize: '11px', opacity: 0.7 }}>
+            🔒 Continuous behavioral monitoring active across all pages
+          </div>
+        </div>
+      )}
+
       <p></p>
     </div>
   );
 };
 
-export default Sign_In;
+export const clearStoredBehavioralData = clearBehavioralData;
+
+export default Sign_Up;
