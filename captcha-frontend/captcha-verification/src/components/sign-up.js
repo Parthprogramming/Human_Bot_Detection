@@ -7,6 +7,7 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 // Legacy behavioral data utilities (for backward compatibility)
 const BEHAVIORAL_DATA_KEY = 'behavioral_data_session';
 
+
 const saveBehavioralData = (data) => {
   try {
     localStorage.setItem(BEHAVIORAL_DATA_KEY, JSON.stringify(data));
@@ -44,6 +45,36 @@ const clearBehavioralData = () => {
 const Sign_Up = () => {
   const prevpoint = useRef(null);
   
+  // Load saved behavioral data on component initialization (legacy support)
+  const savedData = loadBehavioralData() || {};
+  
+  // Get current global behavioral data
+  const globalData = globalBehavioralTracker.getBehavioralData();
+  
+  // Declare state variables first, before any useEffect hooks
+  const [usaiId, setUsaiId] = useState(savedData.usaiId || "");
+  const [userName, setUserName] = useState(savedData.userName || "");
+  
+  // Use global behavioral data instead of local state
+  const [cursorMovements, setCursorMovements] = useState(globalData.cursorMovements || []);
+  const [cursorSpeeds, setCursorSpeeds] = useState(globalData.cursorSpeeds || []);
+  const [cursorAcceleration, setCursorAcceleration] = useState(globalData.cursorAcceleration || []);
+  const [cursorJitter, setCursorJitter] = useState(globalData.cursorJitter || []);
+  const [keyPressTimes, setKeyPressTimes] = useState(globalData.keyPressTimes || []);
+  
+  // Additional state variables for behavioral tracking
+  const [actionCount, setActionCount] = useState(globalData.actionCount || 0);
+  const [lastActionTime, setLastActionTime] = useState(globalData.lastActionTime || Date.now());
+  const [botDetectionResults, setBotDetectionResults] = useState(null);
+  
+  // Baseline collection state
+  const [isCollectingBaseline, setIsCollectingBaseline] = useState(false);
+  const [baselineCompleted, setBaselineCompleted] = useState(false);
+  const [continuousTransmissionActive, setContinuousTransmissionActive] = useState(false);
+  
+  // Global session stats for display
+  const [sessionStats, setSessionStats] = useState({});
+  
   // Initialize global behavioral tracking for sign-up page
   useEffect(() => {
     globalBehavioralTracker.setCurrentPage('sign-up');
@@ -56,6 +87,7 @@ const Sign_Up = () => {
 
   // Real-time sync with global behavioral tracker
   useEffect(() => {
+    
     const syncInterval = setInterval(() => {
       const freshData = globalBehavioralTracker.getBehavioralData();
       
@@ -70,6 +102,10 @@ const Sign_Up = () => {
       setTabkeycount(freshData.TabKeyCount || 0);
       setActionCount(freshData.actionCount || 0);
       setLastActionTime(freshData.lastActionTime || Date.now());
+      
+      // 🎯 Sync baseline collection states
+      setIsCollectingBaseline(freshData.isCollectingBaseline || false);
+      setBaselineCompleted(freshData.baselineCompleted || false);
       
       // Update global tracker with any local form data
       globalBehavioralTracker.updateBehavioralData({
@@ -102,15 +138,57 @@ const Sign_Up = () => {
       setBotDetectionResults(analysisResult);
     };
     
+    // Listen for unauthorized user events
+    const handleUnauthorizedUser = (event) => {
+      const { analysisResult, message } = event.detail;
+      console.warn('🚨 Unauthorized user detected on sign-up page:', analysisResult);
+      
+      setMessage(`🚨 ${message || 'Need for Authentication'} - Suspicious behavior detected`);
+      setIsBlocked(true);
+      
+      // Additional UI feedback
+      document.body.style.filter = 'blur(2px)';
+      setTimeout(() => {
+        document.body.style.filter = '';
+      }, 3000);
+    };
+    
+    // Listen for baseline completion events (BACKGROUND collection)
+    const handleBaselineCompleted = (event) => {
+      const { baselineData, sessionId } = event.detail;
+      console.log('✅ BACKGROUND Baseline collection completed on sign-up page:', baselineData);
+      
+      setIsCollectingBaseline(false);
+      setBaselineCompleted(true);
+      setContinuousTransmissionActive(true);
+      setMessage('✅ Background baseline collection completed (20s). Baseline sent to backend. Continuous monitoring active.');
+    };
+    
+    // Also listen for manual baseline completion (for backward compatibility)
+    const handleManualBaselineCompleted = (event) => {
+      const { baselineData, sessionId } = event.detail;
+      console.log('✅ Manual baseline collection completed on sign-up page:', baselineData);
+      
+      setIsCollectingBaseline(false);
+      setBaselineCompleted(true);
+      setContinuousTransmissionActive(true);
+      setMessage('✅ Manual baseline collection completed (20s). Baseline sent to backend. Continuous monitoring active.');
+    };
+    
     window.addEventListener('behavioralAnalysis', handleBehavioralAnalysis);
+    window.addEventListener('unauthorizedUser', handleUnauthorizedUser);
+    window.addEventListener('backgroundBaselineCompleted', handleBaselineCompleted); // BACKGROUND completion
+    window.addEventListener('baselineCompleted', handleManualBaselineCompleted); // Manual completion
     
     return () => {
       window.removeEventListener('behavioralAnalysis', handleBehavioralAnalysis);
+      window.removeEventListener('unauthorizedUser', handleUnauthorizedUser);
+      window.removeEventListener('backgroundBaselineCompleted', handleBaselineCompleted);
+      window.removeEventListener('baselineCompleted', handleManualBaselineCompleted);
     };
   }, []);
 
-  // Global session stats for display
-  const [sessionStats, setSessionStats] = useState({});
+  // sessionStats is already declared above
   
   useEffect(() => {
     const updateStats = () => {
@@ -124,21 +202,9 @@ const Sign_Up = () => {
     return () => clearInterval(statsInterval);
   }, []);
   
-  // Load saved behavioral data on component initialization (legacy support)
-  const savedData = loadBehavioralData() || {};
+  // State variables are already declared above, no need to redeclare here
   
-  // Get current global behavioral data
-  const globalData = globalBehavioralTracker.getBehavioralData();
-  
-  const [usaiId, setUsaiId] = useState(savedData.usaiId || "");
-  const [userName, setUserName] = useState(savedData.userName || "");
-  
-  // Use global behavioral data instead of local state
-  const [cursorMovements, setCursorMovements] = useState(globalData.cursorMovements || []);
-  const [cursorSpeeds, setCursorSpeeds] = useState(globalData.cursorSpeeds || []);
-  const [cursorAcceleration, setCursorAcceleration] = useState(globalData.cursorAcceleration || []);
-  const [cursorJitter, setCursorJitter] = useState(globalData.cursorJitter || []);
-  const [keyPressTimes, setKeyPressTimes] = useState(globalData.keyPressTimes || []);
+  // Use global behavioral data instead of local state (continuing from above)
   const [cursorCurvature, setCursorCurvature] = useState(globalData.cursorCurvature || []);
   const [keyHoldTimes, setKeyHoldTimes] = useState(globalData.keyHoldTimes || []);
   const [clickTimes, setClickTimes] = useState(globalData.clickTimes || []);
@@ -194,10 +260,8 @@ const Sign_Up = () => {
   const [keyboardPatterns, setKeyboardPatterns] = useState(globalData.keyboardPatterns || []);
   const [deviceInfo, setDeviceInfo] = useState(savedData.deviceInfo || {});
   const [isAutomatedBrowser, setIsAutomatedBrowser] = useState(savedData.isAutomatedBrowser || false);
-  const [lastActionTime, setLastActionTime] = useState(savedData.lastActionTime || Date.now());
-  const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
+  // lastActionTime, actionCount, and botDetectionResults are already declared above
   const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
-  const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
 
   const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
   const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
@@ -2531,6 +2595,45 @@ useEffect(() => {
     return patterns;
   };
 
+  // 🎯 Updated function - no longer manually starts baseline collection
+  const handleVerifyClick = async (e) => {
+    console.log("*** VERIFY BUTTON CLICKED ***");
+    
+    // Track the button click
+    globalBehavioralTracker.trackEvent('buttonClick', {
+      button: 'verify',
+      timestamp: Date.now(),
+      page: 'sign-up'
+    });
+    
+    // Prevent default form submission
+    e.preventDefault();
+    
+    // Check if baseline collection is still in progress (running in background)
+    if (isCollectingBaseline) {
+      setMessage('⏳ Background baseline collection in progress. Please wait for completion...');
+      return;
+    }
+    
+    // Check if baseline has completed and continuous transmission is active
+    if (baselineCompleted && continuousTransmissionActive) {
+      // If baseline is already completed, proceed to normal form submission
+      console.log("✅ Background baseline completed, proceeding to form submission...");
+      await submitForm(e);
+      return;
+    }
+    
+    // If baseline hasn't completed yet, inform user to wait
+    if (!baselineCompleted) {
+      setMessage('⏳ Please wait for background baseline collection to complete (takes 20 seconds from page load)...');
+      return;
+    }
+    
+    // Fallback - should not reach here
+    console.warn("Unexpected state in handleVerifyClick");
+    await submitForm(e);
+  };
+
   // Modify submitForm to include automation pattern detection
   const submitForm = async (e) => {
     console.log("*** SUBMIT FORM FUNCTION STARTED ***");
@@ -3018,14 +3121,7 @@ useEffect(() => {
       
       
       <button 
-        onClick={(e) => {
-          globalBehavioralTracker.trackEvent('buttonClick', {
-            button: 'verify',
-            timestamp: Date.now(),
-            page: 'sign-up'
-          });
-          submitForm(e);
-        }}
+        onClick={handleVerifyClick}
         id={buttonId}
         disabled={!isFormValid}
         style={{
@@ -3036,10 +3132,35 @@ useEffect(() => {
           transition: 'all 0.3s ease'
         }}
       >
-        Verify
+        {isCollectingBaseline ? '⏳ Collecting Baseline...' : 
+         baselineCompleted ? '✅ Verify' : 'Verify'}
       </button>
         <p>Already Have an Account? <a href="/sign-in">Sign In</a></p>
       <p className={isBlocked ? "error-message" : ""}>{message}</p>
+
+      {/* Baseline Collection and Transmission Status */}
+      {(isCollectingBaseline || baselineCompleted || continuousTransmissionActive) && (
+        <div style={{ 
+          marginTop: '15px', 
+          padding: '12px', 
+          backgroundColor: isCollectingBaseline ? '#fff3cd' : baselineCompleted ? '#d4edda' : '#d1ecf1', 
+          borderRadius: '6px',
+          border: `1px solid ${isCollectingBaseline ? '#ffeaa7' : baselineCompleted ? '#c3e6cb' : '#bee5eb'}`,
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+            {isCollectingBaseline && '🎯 Baseline Collection In Progress'}
+            {baselineCompleted && !continuousTransmissionActive && '✅ Baseline Collection Completed'}
+            {continuousTransmissionActive && '🔄 Continuous Monitoring Active'}
+          </div>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            {isCollectingBaseline && 'Please interact normally with the page for 20 seconds...'}
+            {baselineCompleted && !continuousTransmissionActive && 'Sending baseline data to backend...'}
+            {continuousTransmissionActive && 'Sending behavioral data to backend every 1 second (no gaps)'}
+          </div>
+        </div>
+      )}
 
       {/* Global Session Statistics Display */}
       {Object.keys(sessionStats).length > 0 && (

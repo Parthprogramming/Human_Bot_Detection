@@ -5,7 +5,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import UserProfile, UserSession, SignInAttempt, SignUpAttempt, BehavioralData
+from .models import UserProfile, UserSession, SignInAttempt, SignUpAttempt, BehavioralData, UserBaselineBehavior
 import json
 import uuid
 import logging
@@ -672,42 +672,232 @@ behavioral_analyzer = BehavioralAnalyzer()
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def handle_baseline_storage(request):
+    """
+    Dedicated API endpoint for storing baseline user behavior from frontend
+    Accepts comprehensive baseline behavioral data and stores it in UserBaselineBehavior model
+    """
+    try:
+        print(f"🎯 BASELINE STORAGE REQUEST RECEIVED: {request.method}")
+        print(f"🎯 Request body size: {len(request.body)} bytes")
+        
+        data = json.loads(request.body)
+        
+        # Extract session ID and baseline data
+        session_id = data.get('session_id')
+        baseline_data = data.get('baseline_data', {})
+
+        if not session_id:
+            print("❌ ERROR: No session ID provided")
+            return JsonResponse({
+                'success': False,
+                'message': 'Session ID is required'
+            }, status=400)
+        
+        if not baseline_data:
+            print("❌ ERROR: No baseline data provided")
+            return JsonResponse({
+                'success': False,
+                'message': 'Baseline data is required'
+            }, status=400)
+
+        # Extract baseline information
+        collection_start_time = baseline_data.get('collectionStartTime')
+        collection_end_time = baseline_data.get('collectionEndTime')
+        metrics = baseline_data.get('metrics', {})
+        overall_profile = baseline_data.get('overallBehaviorProfile', {})
+
+        if collection_start_time:
+            start_dt = datetime.fromtimestamp(collection_start_time / 1000, tz=timezone.utc)
+        else:
+            start_dt = timezone.now()
+            
+        if collection_end_time:
+            end_dt = datetime.fromtimestamp(collection_end_time / 1000, tz=timezone.utc)
+        else:
+            end_dt = timezone.now()
+        
+        # Calculate collection duration
+        duration_ms = int((end_dt - start_dt).total_seconds() * 1000)
+        
+        print(f"🦅 Calculated duration: {duration_ms}ms")
+        
+        # Extract user_id from session or use session_id as fallback
+        user_id = baseline_data.get('formData', {}).get('userName') or f"session_{session_id}"
+        
+        print(f"🦅 User ID: {user_id}")
+        
+        # 🦅 Calculate comprehensive data quality score for eagle's eye data
+        mouse_movements = len(baseline_data.get('cursorMovements', []))
+        key_presses = len(baseline_data.get('keyPressTimes', []))
+        clicks = len(baseline_data.get('clickTimestamps', []))
+        scroll_events = len(baseline_data.get('scrollSpeeds', []))
+        action_count = baseline_data.get('actionCount', 0)
+        
+        # Enhanced quality scoring for comprehensive data
+        cursor_paths = len(baseline_data.get('cursorPaths', []))
+        hover_patterns = len(baseline_data.get('hoverPatterns', []))
+        typing_rhythm = len(baseline_data.get('typingRhythm', []))
+        pages_visited = len(baseline_data.get('pagesVisited', []))
+        
+        # Comprehensive quality calculation
+        movement_score = min(1.0, mouse_movements / 50)  # Expect ~50 movements in 20s
+        interaction_score = min(1.0, (key_presses + clicks) / 20)  # Expect ~20 interactions
+        pattern_score = min(1.0, (cursor_paths + hover_patterns + typing_rhythm) / 30)
+        navigation_score = min(1.0, pages_visited / 3)  # Account for page navigation
+        
+        quality_score = (movement_score * 0.3 + interaction_score * 0.3 + 
+                        pattern_score * 0.3 + navigation_score * 0.1)
+        
+        sufficient_interaction = (action_count >= 15 and mouse_movements >= 10 and 
+                                (key_presses >= 5 or clicks >= 3))
+        
+        # 🦅 Enhanced baseline metrics for eagle's eye analysis
+        enhanced_metrics = {
+            **metrics,
+            'comprehensive_profile': overall_profile,
+            'eagle_eye_scores': {
+                'movement_score': movement_score,
+                'interaction_score': interaction_score,
+                'pattern_score': pattern_score,
+                'navigation_score': navigation_score,
+                'overall_quality': quality_score
+            },
+            'data_richness': {
+                'mouse_movements': mouse_movements,
+                'key_presses': key_presses,
+                'clicks': clicks,
+                'scroll_events': scroll_events,
+                'cursor_paths': cursor_paths,
+                'hover_patterns': hover_patterns,
+                'typing_rhythm_points': typing_rhythm,
+                'pages_visited': pages_visited,
+                'total_actions': action_count
+            }
+        }
+        
+
+        try:
+            baseline_record = UserBaselineBehavior.objects.create(
+                user_id=user_id,
+                session_id=session_id,
+                baseline_user_behavior=baseline_data,
+                collection_start_time=start_dt,
+                collection_end_time=end_dt,
+                collection_duration_ms=duration_ms,
+                baseline_metrics=enhanced_metrics,
+                data_quality_score=quality_score,
+                sufficient_interaction=sufficient_interaction,
+                is_active=True
+            )
+            print(f"✅ Database record created successfully with ID: {baseline_record.id}")
+        except Exception as db_error:
+            print(f"❌ DATABASE ERROR: {str(db_error)}")
+            print(f"❌ Error type: {type(db_error).__name__}")
+            raise db_error
+        
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Comprehensive eagle\'s eye baseline behavioral data stored successfully',
+            'baseline_id': baseline_record.id,
+            'user_id': user_id,
+            'session_id': session_id,
+            'collection_duration_ms': duration_ms,
+            'data_quality_score': quality_score,
+            'sufficient_interaction': sufficient_interaction,
+            'baseline_summary': baseline_record.get_baseline_summary(),
+            'eagle_eye_metrics': enhanced_metrics['eagle_eye_scores'],
+            'data_richness': enhanced_metrics['data_richness'],
+            'stored_at': baseline_record.created_at.isoformat(),
+            'baseline_type': 'comprehensive_eagle_eye'
+        }, status=200)
+        
+    except json.JSONDecodeError:
+        print("❌ ERROR: Invalid JSON data")
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
+        
+    except Exception as e:
+        logger.error(f"Error storing baseline data: {str(e)}")
+        print(f"❌ BASELINE STORAGE ERROR: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'Failed to store baseline data',
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def analyze_behavioral_data(request):
     """
     Real-time behavioral analysis endpoint
     Analyzes user behavior and determines if user is authorized
     """
     try:
+        print(f"🔍 REQUEST RECEIVED: {request.method} to analyze_behavioral_data")
+        print(f"🔍 Request body size: {len(request.body)} bytes")
+        
         data = json.loads(request.body)
         
         # Extract session ID and behavioral data
         session_id = data.get('session_id')
         behavioral_data = data.get('behavioral_data', {})
         
+        print(f"🔍 PARSED DATA:")
+        print(f"  - session_id: {session_id}")
+        print(f"  - has behavioral_data: {bool(behavioral_data)}")
+        
         if not session_id:
+            print("❌ ERROR: No session ID provided")
             return JsonResponse({
                 'success': False,
                 'message': 'Session ID is required'
             }, status=400)
         
-        # Verify session exists
+        if not behavioral_data:
+            print("❌ ERROR: No behavioral data provided")
+            return JsonResponse({
+                'success': False,
+                'message': 'Behavioral data is required'
+            }, status=400)
+        
+        # Verify or create session 
         try:
             session = UserSession.objects.get(session_id=session_id, is_active=True)
         except UserSession.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'message': 'Session not found or inactive'
-            }, status=404)
+            # Create a new session for behavioral tracking if it doesn't exist
+            session = UserSession.objects.create(
+                session_id=session_id,
+                is_active=True,
+                created_at=timezone.now()
+            )
+            print(f"🆕 Created new UserSession for behavioral tracking: {session_id}")
         
-        # Perform real-time analysis
+        # 📊 STEP 1: COMPREHENSIVE BEHAVIORAL ANALYSIS
+        print(f"🧠 Analyzing behavioral data for session {session_id}...")
+        print(f"📈 Data points received: {len(behavioral_data)} behavioral metrics")
+        
+        # Perform comprehensive real-time behavioral analysis
         analysis_result = behavioral_analyzer.analyze_real_time_behavior(
             session_id, behavioral_data
         )
         
-        # Determine user authorization status
+        # 🎯 STEP 2: DETERMINE AUTHORIZATION STATUS BASED ON ANALYSIS
         user_auth_status = 'Authorized_user' if analysis_result['is_authorized'] else 'Unauthorized_user'
+        risk_score = analysis_result.get('anomaly_score', 0)
+        confidence = analysis_result.get('confidence', 0)
         
-        # Store behavioral data with analysis results
+        print(f"🔍 Analysis Result: {user_auth_status}")
+        print(f"📊 Risk Score: {risk_score:.3f} | Confidence: {confidence:.3f}")
+        print(f"⚠️ Suspicious Indicators: {len(analysis_result.get('suspicious_indicators', []))}")
+        
+        # 💾 STEP 3: STORE ANALYZED DATA IN DATABASE
+        print(f"💾 Storing behavioral analysis results for {user_auth_status}...")
+        
         behavioral_record = BehavioralData.objects.create(
             session_id=session_id,
             user_auth=user_auth_status,
@@ -722,18 +912,18 @@ def analyze_behavioral_data(request):
             paste_detected=behavioral_data.get('paste_detected', False),
             total_time=behavioral_data.get('total_time', 0),
             classification='Human' if analysis_result['is_authorized'] else 'Bot',
-            human_score=analysis_result['confidence'] if analysis_result['is_authorized'] else 1.0 - analysis_result['confidence'],
-            bot_score=1.0 - analysis_result['confidence'] if analysis_result['is_authorized'] else analysis_result['confidence'],
-            human_indicators=[] if not analysis_result['is_authorized'] else ['Normal behavioral patterns'],
+            human_score=confidence if analysis_result['is_authorized'] else 1.0 - confidence,
+            bot_score=1.0 - confidence if analysis_result['is_authorized'] else confidence,
+            human_indicators=analysis_result.get('human_indicators', []) if analysis_result['is_authorized'] else [],
             bot_indicators=analysis_result.get('suspicious_indicators', []),
             bot_fingerprint_score=behavioral_data.get('bot_fingerprint_score', 0),
             suspicious_flag=not analysis_result['is_authorized'],
-            suspicious_feature_ratio=behavioral_data.get('suspicious_feature_ratio', 0),
+            suspicious_feature_ratio=risk_score,
             mouse_movement_debug=behavioral_data.get('mouse_movement_debug', {}),
             speed_calculation_debug=behavioral_data.get('speed_calculation_debug', {}),
             post_paste_activity=behavioral_data.get('post_paste_activity', {}),
             keyboard_patterns=behavioral_data.get('keyboard_patterns', []),
-            suspicious_patterns=behavioral_data.get('suspicious_patterns', []),
+            suspicious_patterns=analysis_result.get('suspicious_indicators', []),
             action_count=behavioral_data.get('action_count', 0),
             is_automated_browser=behavioral_data.get('is_automated_browser', False),
             cursor_entropy=behavioral_data.get('cursor_entropy', 0),
@@ -741,41 +931,69 @@ def analyze_behavioral_data(request):
             scroll_changes=behavioral_data.get('scroll_changes', 0),
             idle_time=behavioral_data.get('idle_time', 0),
             honeypot_value=behavioral_data.get('honeypot_value'),
-            tabkeycount=behavioral_data.get('tabkeycount', 0),
+            tabkeycount=behavioral_data.get('TabKeyCount', 0),
             cursorAngleVariance=behavioral_data.get('cursorAngleVariance', 0),
             mouseJitter=behavioral_data.get('mouseJitter', []),
-            micropause=behavioral_data.get('micropause', []),
-            hesitation=behavioral_data.get('hesitation', []),
-            devicefingerprint=str(behavioral_data.get('devicefingerprint', '0')),
-            missing_canvas_fingerprint=behavioral_data.get('missing_canvas_fingerprint', False),
-            canvas_metrics=behavioral_data.get('canvas_metrics', {}),
-            unsualscreenresolution=behavioral_data.get('unsualscreenresolution', {}),
-            gpu_info=behavioral_data.get('gpu_info', {}),
-            timing_metrics=behavioral_data.get('timing_metrics', {}),
-            evasion_signals=behavioral_data.get('evasion_signals', {})
+            micropause=behavioral_data.get('microPauses', []),
+            hesitation=behavioral_data.get('hesitationTimes', []),
+            devicefingerprint=str(behavioral_data.get('deviceFingerprint', '0')),
+            missing_canvas_fingerprint=behavioral_data.get('missingCanvasFingerprint', False),
+            canvas_metrics=behavioral_data.get('canvasMetrics', {}),
+            unsualscreenresolution=behavioral_data.get('unusualScreenResolution', {}),
+            gpu_info=behavioral_data.get('gpuInfo', {}),
+            timing_metrics=behavioral_data.get('timingMetrics', {}),
+            evasion_signals=behavioral_data.get('evasionSignals', {})
         )
         
         # Update session activity
         session.update_activity()
         
-        # Log analysis result
-        logger.info(f"Behavioral analysis for session {session_id}: {user_auth_status} "
-                   f"(confidence: {analysis_result['confidence']:.2f}, "
-                   f"anomaly: {analysis_result['anomaly_score']:.2f})")
+
         
+        # 🚨 Special handling for unauthorized users
+        if not analysis_result['is_authorized']:
+            print(f"🚨 UNAUTHORIZED USER DETECTED - Session: {session_id}")
+            print(f"⚠️ Risk Score: {risk_score:.3f} | Confidence: {confidence:.3f}")
+            print(f"🔍 Suspicious Indicators: {analysis_result.get('suspicious_indicators', [])}")
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Unauthorized user detected',
+                'session_id': session_id,
+                'user_auth_status': 'Unauthorized_user',
+                'is_authorized': False,
+                'requires_authentication': True,
+                'authentication_message': 'Need for Authentication',
+                'confidence': confidence,
+                'risk_score': risk_score,
+                'anomaly_score': analysis_result['anomaly_score'],
+                'risk_factors': analysis_result['risk_factors'],
+                'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
+                'recommendation': 'User requires immediate authentication verification',
+                'analysis_timestamp': timezone.now().isoformat(),
+                'record_id': behavioral_record.id,
+                'action_required': 'AUTHENTICATION_NEEDED'
+            }, status=200)
+        
+        # ✅ Response for authorized users
         return JsonResponse({
             'success': True,
+            'message': f'Behavioral analysis complete: {user_auth_status}',
             'session_id': session_id,
             'user_auth_status': user_auth_status,
             'is_authorized': analysis_result['is_authorized'],
-            'confidence': analysis_result['confidence'],
+            'requires_authentication': False,
+            'confidence': confidence,
+            'risk_score': risk_score,
             'anomaly_score': analysis_result['anomaly_score'],
             'risk_factors': analysis_result['risk_factors'],
             'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
+            'human_indicators': analysis_result.get('human_indicators', []),
             'recommendation': analysis_result['recommendation'],
+            'analysis_timestamp': timezone.now().isoformat(),
             'profile_size': analysis_result.get('profile_size', 0),
             'record_id': behavioral_record.id,
-            'timestamp': behavioral_record.created_at.isoformat()
+            'stored_at': behavioral_record.created_at.isoformat()
         }, status=200)
         
     except json.JSONDecodeError:

@@ -190,6 +190,74 @@ class BehavioralData(models.Model):
         ]
         ordering = ['-created_at']
     
+class UserBaselineBehavior(models.Model):
+    """
+    Model to store user baseline behavioral data collected during the initial 20-second period
+    """
+    user_id = models.CharField(max_length=255, help_text="User identifier (USAI ID or username)")
+    session_id = models.CharField(max_length=100, help_text="Session identifier for the baseline collection")
+    baseline_user_behavior = models.JSONField(
+        help_text="Complete baseline behavioral data collected during 20-second period"
+    )
+    
+    # Additional baseline metadata
+    collection_start_time = models.DateTimeField(help_text="When baseline collection started")
+    collection_end_time = models.DateTimeField(help_text="When baseline collection ended")
+    collection_duration_ms = models.IntegerField(help_text="Actual collection duration in milliseconds")
+    
+    # Baseline metrics for quick access
+    baseline_metrics = models.JSONField(
+        default=dict,
+        help_text="Calculated baseline metrics (speeds, frequencies, patterns)"
+    )
+    
+    # Quality indicators
+    data_quality_score = models.FloatField(
+        default=0.0,
+        help_text="Quality score of baseline data (0.0 to 1.0)"
+    )
+    sufficient_interaction = models.BooleanField(
+        default=False,
+        help_text="Whether sufficient user interaction was captured"
+    )
+    
+    # Status tracking
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this baseline is currently active for comparison"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'user_baseline_behavior'
+        indexes = [
+            models.Index(fields=['user_id']),
+            models.Index(fields=['session_id']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_active']),
+        ]
+        ordering = ['-created_at']
+    
     def __str__(self):
-        return f"Session {self.session_id} - {self.user_auth} - {self.classification} - {self.created_at}"
+        return f"Baseline for {self.user_id} - Session {self.session_id} - {self.created_at}"
+    
+    def get_baseline_summary(self):
+        """
+        Get a summary of the baseline behavior for quick reference
+        """
+        if not self.baseline_metrics:
+            return "No metrics available"
+        
+        return {
+            'duration': f"{self.collection_duration_ms/1000:.1f}s",
+            'mouse_movements': self.baseline_metrics.get('mouseMovementCount', 0),
+            'key_presses': self.baseline_metrics.get('keyPressCount', 0),
+            'clicks': self.baseline_metrics.get('clickCount', 0),
+            'avg_mouse_speed': f"{self.baseline_metrics.get('averageMouseSpeed', 0):.2f}",
+            'quality_score': f"{self.data_quality_score:.2f}",
+            'sufficient_interaction': self.sufficient_interaction
+        }
 

@@ -48,6 +48,42 @@ const CaptchaForm = () => {
   const prevpoint = useRef(null);
   const [usaiId, setUsaiId] = useState("");
   const [cursorMovements, setCursorMovements] = useState(savedData.cursorMovements || []);
+
+  // Handle unauthorized user detection
+  const handleUnauthorizedUser = () => {
+    // Create and show authentication message modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #ff4444;
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 10000;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    `;
+    modal.textContent = 'Need for Authentication';
+    document.body.appendChild(modal);
+
+    // Apply blur effect to the page
+    document.body.style.filter = 'blur(2px)';
+
+    // Remove modal and blur after 3 seconds
+    setTimeout(() => {
+      if (modal.parentNode) {
+        document.body.removeChild(modal);
+      }
+      document.body.style.filter = '';
+    }, 3000);
+
+    console.log('🚨 Captcha Form: Unauthorized user detected - showing authentication message');
+  };
   const [cursorSpeeds, setCursorSpeeds] = useState(savedData.cursorSpeeds || []);
   const [cursorAcceleration, setCursorAcceleration] = useState(savedData.cursorAcceleration || []);
   const [cursorJitter, setCursorJitter] = useState(savedData.cursorJitter || []);
@@ -118,6 +154,10 @@ const CaptchaForm = () => {
   const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
   const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
   const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
+
+  // CAPTCHA-specific state variables
+  const [captchaAnswers, setCaptchaAnswers] = useState(savedData.captchaAnswers || "");
+  const [isSolved, setIsSolved] = useState(savedData.isSolved || false);
 
   const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
   const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
@@ -266,7 +306,9 @@ const CaptchaForm = () => {
       fittsDeviationScore,
       idleResumeAngularJerk,
       thermalHoverNoise,
-      hoverPositions
+      hoverPositions,
+      captchaAnswers,
+      isSolved
     };
 
     // Save every 2 seconds to avoid excessive localStorage writes
@@ -289,7 +331,7 @@ const CaptchaForm = () => {
     audio_fp_entropy_low, evasionSignals, unusualScreenResolution, gpuInfo,
     gpublacklist, timingMetrics, cursorMicroJitter, pathEntropy,
     accelerationVariance, fittsDeviationScore, idleResumeAngularJerk,
-    thermalHoverNoise, hoverPositions
+    thermalHoverNoise, hoverPositions, captchaAnswers, isSolved
   ]);
 
   // Save data on page unload/refresh
@@ -353,7 +395,9 @@ const CaptchaForm = () => {
         fittsDeviationScore,
         idleResumeAngularJerk,
         thermalHoverNoise,
-        hoverPositions
+        hoverPositions,
+        captchaAnswers,
+        isSolved
       };
       saveBehavioralData(currentBehavioralData);
       console.log('💾 Behavioral data saved before page unload');
@@ -2323,6 +2367,9 @@ useEffect(() => {
     document.addEventListener("scroll", handleScroll);
     document.addEventListener("keydown", handleTabKey);
 
+    // Add unauthorized user event listener
+    document.addEventListener('unauthorizedUser', handleUnauthorizedUser);
+
     return () => {
       clearTimeout(idleTimer);
       document.removeEventListener("mousemove", handleMouseMove);
@@ -2335,6 +2382,9 @@ useEffect(() => {
       document.removeEventListener("mousemove", resetIdleTime);
       document.removeEventListener("keypress", resetIdleTime);
       document.removeEventListener("keydown", handleTabKey);
+      
+      // Remove unauthorized user event listener
+      document.removeEventListener('unauthorizedUser', handleUnauthorizedUser);
     };
   }, [lastKeyPress, lastMouseMove, lastScroll]);
 
