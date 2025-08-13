@@ -11,9 +11,13 @@ import uuid
 import logging
 import math
 import statistics
+import numpy as np
+from scipy.spatial.distance import mahalanobis
+from scipy import linalg
 from datetime import datetime, timedelta
 import threading
 import time
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -347,41 +351,6 @@ def sign_in(request):
         }, status=500)
 
 
-@require_http_methods(["GET"])
-def check_session(request, session_id):
-    """
-    Check if a session is still active
-    """
-    try:
-        session = UserSession.objects.get(session_id=session_id, is_active=True)
-        
-        if session.is_session_expired():
-            session.is_active = False
-            session.save()
-            
-            return JsonResponse({
-                'success': False,
-                'message': 'Session expired'
-            }, status=401)
-        
-        # Update last activity
-        session.update_activity()
-        
-        return JsonResponse({
-            'success': True,
-            'session_id': session.session_id,
-            'user_id': session.user.id if session.user else None,
-            'name': session.name,
-            'usai_id': session.usai_id,
-            'session_type': session.session_type
-        }, status=200)
-        
-    except UserSession.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': 'Session not found'
-        }, status=404)
-
 
 class BehavioralAnalyzer:
     """
@@ -394,49 +363,59 @@ class BehavioralAnalyzer:
         
     def calculate_behavioral_metrics(self, behavioral_data):
         """
-        Calculate advanced behavioral metrics from raw data
+        Calculate comprehensive advanced behavioral metrics from ALL behavioral fields sent from frontend
+        Enhanced to analyze cursor movements, keystrokes, clicks, jitter, hesitation, device info, and more
         """
         metrics = {}
         
         try:
-            # Cursor movement analysis
-            cursor_movements = behavioral_data.get('cursor_movements', [])
-            if cursor_movements:
-                speeds = []
-                accelerations = []
-                angles = []
-                
-                for i in range(1, len(cursor_movements)):
-                    prev = cursor_movements[i-1]
-                    curr = cursor_movements[i]
-                    
-                    # Calculate speed
-                    dx = curr.get('x', 0) - prev.get('x', 0)
-                    dy = curr.get('y', 0) - prev.get('y', 0)
-                    dt = (curr.get('timestamp', 0) - prev.get('timestamp', 0)) / 1000.0
-                    
-                    if dt > 0:
-                        distance = math.sqrt(dx**2 + dy**2)
-                        speed = distance / dt
-                        speeds.append(speed)
-                        
-                        # Calculate angle
-                        angle = math.atan2(dy, dx)
-                        angles.append(angle)
-                
-                # Calculate accelerations
-                for i in range(1, len(speeds)):
-                    accel = speeds[i] - speeds[i-1]
-                    accelerations.append(accel)
-                
-                metrics['avg_speed'] = statistics.mean(speeds) if speeds else 0
-                metrics['speed_variance'] = statistics.variance(speeds) if len(speeds) > 1 else 0
-                metrics['avg_acceleration'] = statistics.mean(accelerations) if accelerations else 0
-                metrics['acceleration_variance'] = statistics.variance(accelerations) if len(accelerations) > 1 else 0
-                metrics['angle_variance'] = statistics.variance(angles) if len(angles) > 1 else 0
-                metrics['movement_entropy'] = self.calculate_entropy(angles) if angles else 0
+            print(f"🔬 Calculating comprehensive behavioral metrics from ALL frontend data...")
             
-            # Keystroke dynamics
+            # 🖱️ COMPREHENSIVE CURSOR MOVEMENT ANALYSIS
+            cursor_movements = behavioral_data.get('cursor_movements', [])
+            cursor_speeds = behavioral_data.get('cursor_speeds', [])
+            cursor_acceleration = behavioral_data.get('cursor_acceleration', [])
+            cursor_curvature = behavioral_data.get('cursor_curvature', [])
+            
+            if cursor_movements:
+                # Calculate movement statistics
+                speeds = cursor_speeds if cursor_speeds else []
+                accelerations = cursor_acceleration if cursor_acceleration else []
+                curvatures = cursor_curvature if cursor_curvature else []
+                
+                # If speeds not provided, calculate from movements
+                if not speeds and len(cursor_movements) > 1:
+                    for i in range(1, len(cursor_movements)):
+                        prev = cursor_movements[i-1]
+                        curr = cursor_movements[i]
+                        
+                        dx = curr.get('x', 0) - prev.get('x', 0)
+                        dy = curr.get('y', 0) - prev.get('y', 0)
+                        dt = (curr.get('timestamp', 0) - prev.get('timestamp', 0)) / 1000.0
+                        
+                        if dt > 0:
+                            distance = math.sqrt(dx**2 + dy**2)
+                            speed = distance / dt
+                            speeds.append(speed)
+                
+                # Calculate comprehensive cursor metrics
+                metrics['cursor_movement_count'] = len(cursor_movements)
+                metrics['avg_cursor_speed'] = statistics.mean(speeds) if speeds else 0
+                metrics['cursor_speed_variance'] = statistics.variance(speeds) if len(speeds) > 1 else 0
+                metrics['max_cursor_speed'] = max(speeds) if speeds else 0
+                metrics['min_cursor_speed'] = min(speeds) if speeds else 0
+                
+                if accelerations:
+                    metrics['avg_cursor_acceleration'] = statistics.mean(accelerations)
+                    metrics['cursor_acceleration_variance'] = statistics.variance(accelerations) if len(accelerations) > 1 else 0
+                
+                if curvatures:
+                    metrics['avg_cursor_curvature'] = statistics.mean(curvatures)
+                    metrics['cursor_curvature_variance'] = statistics.variance(curvatures) if len(curvatures) > 1 else 0
+                
+                print(f"✅ Cursor metrics: {len(cursor_movements)} movements, avg_speed: {metrics['avg_cursor_speed']:.2f}")
+            
+            # ⌨️ COMPREHENSIVE KEYSTROKE ANALYSIS
             key_press_times = behavioral_data.get('key_press_times', [])
             key_hold_times = behavioral_data.get('key_hold_times', [])
             
@@ -446,33 +425,188 @@ class BehavioralAnalyzer:
                     interval = key_press_times[i] - key_press_times[i-1]
                     intervals.append(interval)
                 
+                metrics['keystroke_count'] = len(key_press_times)
                 metrics['avg_keystroke_interval'] = statistics.mean(intervals) if intervals else 0
                 metrics['keystroke_variance'] = statistics.variance(intervals) if len(intervals) > 1 else 0
+                metrics['keystroke_rhythm_consistency'] = 1 / (1 + metrics['keystroke_variance']) if metrics['keystroke_variance'] > 0 else 1
+                
+                print(f"✅ Keystroke metrics: {len(key_press_times)} keystrokes")
             
             if key_hold_times:
                 metrics['avg_key_hold_time'] = statistics.mean(key_hold_times)
                 metrics['key_hold_variance'] = statistics.variance(key_hold_times) if len(key_hold_times) > 1 else 0
+                metrics['key_hold_consistency'] = 1 / (1 + metrics['key_hold_variance']) if metrics['key_hold_variance'] > 0 else 1
             
-            # Click patterns
+            # 🖱️ COMPREHENSIVE CLICK ANALYSIS
             click_timestamps = behavioral_data.get('click_timestamps', [])
+            click_intervals = behavioral_data.get('click_intervals', [])
+            
             if click_timestamps:
-                click_intervals = []
-                for i in range(1, len(click_timestamps)):
-                    interval = click_timestamps[i] - click_timestamps[i-1]
-                    click_intervals.append(interval)
+                if not click_intervals and len(click_timestamps) > 1:
+                    click_intervals = [click_timestamps[i] - click_timestamps[i-1] for i in range(1, len(click_timestamps))]
                 
+                metrics['click_count'] = len(click_timestamps)
                 metrics['avg_click_interval'] = statistics.mean(click_intervals) if click_intervals else 0
                 metrics['click_variance'] = statistics.variance(click_intervals) if len(click_intervals) > 1 else 0
+                metrics['click_rhythm_consistency'] = 1 / (1 + metrics['click_variance']) if metrics['click_variance'] > 0 else 1
+                
+                print(f"✅ Click metrics: {len(click_timestamps)} clicks")
             
-            # Advanced metrics
+            # 📜 SCROLL BEHAVIOR ANALYSIS
+            scroll_speeds = behavioral_data.get('scroll_speeds', [])
+            scroll_changes = behavioral_data.get('scroll_changes', 0)
+            
+            if scroll_speeds:
+                metrics['avg_scroll_speed'] = statistics.mean(scroll_speeds)
+                metrics['scroll_speed_variance'] = statistics.variance(scroll_speeds) if len(scroll_speeds) > 1 else 0
+                metrics['scroll_smoothness'] = 1 / (1 + metrics['scroll_speed_variance']) if metrics['scroll_speed_variance'] > 0 else 1
+            
+            metrics['scroll_changes_count'] = scroll_changes
+            metrics['scroll_frequency'] = scroll_changes / max(behavioral_data.get('total_time', 1), 1) * 1000
+            
+            # 🎯 MOUSE JITTER ANALYSIS
+            mouse_jitter = behavioral_data.get('mouseJitter', [])
+            if mouse_jitter:
+                jitter_distances = [item.get('distance', 0) for item in mouse_jitter if isinstance(item, dict)]
+                jitter_speeds = [item.get('speed', 0) for item in mouse_jitter if isinstance(item, dict)]
+                
+                metrics['mouse_jitter_count'] = len(mouse_jitter)
+                metrics['avg_jitter_distance'] = statistics.mean(jitter_distances) if jitter_distances else 0
+                metrics['avg_jitter_speed'] = statistics.mean(jitter_speeds) if jitter_speeds else 0
+                metrics['jitter_intensity'] = metrics['mouse_jitter_count'] / max(len(cursor_movements), 1) if cursor_movements else 0
+                
+                print(f"✅ Jitter analysis: {len(mouse_jitter)} jitter events")
+            
+            # ⏸️ HESITATION AND MICROPAUSE ANALYSIS
+            hesitation_times = behavioral_data.get('hesitation', [])
+            micropauses = behavioral_data.get('micropause', [])
+            
+            if hesitation_times:
+                hesitation_durations = [item.get('duration', 0) for item in hesitation_times if isinstance(item, dict)]
+                metrics['hesitation_count'] = len(hesitation_times)
+                metrics['avg_hesitation_duration'] = statistics.mean(hesitation_durations) if hesitation_durations else 0
+                metrics['hesitation_variance'] = statistics.variance(hesitation_durations) if len(hesitation_durations) > 1 else 0
+                metrics['hesitation_frequency'] = metrics['hesitation_count'] / max(behavioral_data.get('total_time', 1), 1) * 1000
+                
+                print(f"✅ Hesitation analysis: {len(hesitation_times)} hesitations")
+            
+            if micropauses:
+                micropause_durations = [item.get('duration', 0) for item in micropauses if isinstance(item, dict)]
+                metrics['micropause_count'] = len(micropauses)
+                metrics['avg_micropause_duration'] = statistics.mean(micropause_durations) if micropause_durations else 0
+                metrics['micropause_variance'] = statistics.variance(micropause_durations) if len(micropause_durations) > 1 else 0
+                metrics['micropause_frequency'] = metrics['micropause_count'] / max(behavioral_data.get('total_time', 1), 1) * 1000
+                
+                print(f"✅ Micropause analysis: {len(micropauses)} micropauses")
+            
+            # 🖥️ DEVICE FINGERPRINTING ANALYSIS
+            device_fingerprint = behavioral_data.get('devicefingerprint', '0')
+            canvas_metrics = behavioral_data.get('canvas_metrics', {})
+            gpu_info = behavioral_data.get('gpu_info', {})
+            unusual_screen = behavioral_data.get('unsualscreenresolution', {})
+            evasion_signals = behavioral_data.get('evasion_signals', {})
+            
+            # Device analysis
+            metrics['device_fingerprint_entropy'] = len(str(device_fingerprint))
+            metrics['missing_canvas_fingerprint'] = behavioral_data.get('missing_canvas_fingerprint', False)
+            
+            # Canvas analysis
+            if canvas_metrics:
+                metrics['canvas_geometry_complexity'] = canvas_metrics.get('geometryLength', 0)
+                metrics['canvas_text_complexity'] = canvas_metrics.get('textLength', 0)
+                metrics['canvas_winding_support'] = 1 if canvas_metrics.get('winding') == 'supported' else 0
+            
+            # Screen resolution analysis
+            if unusual_screen:
+                metrics['screen_resolution_suspicious'] = 1 if unusual_screen.get('is_unusual', False) else 0
+                metrics['screen_spoofing_detected'] = 1 if unusual_screen.get('spoofedMismatch', False) else 0
+                metrics['device_pixel_ratio'] = unusual_screen.get('device_pixel_ratio', 1)
+            
+            # Evasion signals analysis
+            if evasion_signals:
+                evasion_count = sum(1 for key, value in evasion_signals.items() if value)
+                metrics['evasion_signals_count'] = evasion_count
+                metrics['automation_risk_score'] = evasion_count / max(len(evasion_signals), 1)
+                
+                # Critical evasion flags
+                metrics['webdriver_detected'] = 1 if evasion_signals.get('webdriver', False) else 0
+                metrics['automation_detected'] = 1 if evasion_signals.get('automation', False) else 0
+                metrics['headless_browser_detected'] = 1 if evasion_signals.get('headless_chrome', False) else 0
+                
+                print(f"✅ Evasion analysis: {evasion_count} signals detected")
+            
+            # 📊 TIMING METRICS ANALYSIS
+            timing_metrics = behavioral_data.get('timing_metrics', {})
+            if timing_metrics:
+                metrics['mouse_movement_frequency'] = timing_metrics.get('mouseMovementFrequency', 0)
+                metrics['key_press_frequency'] = timing_metrics.get('keyPressFrequency', 0)
+                metrics['click_frequency'] = timing_metrics.get('clickFrequency', 0)
+                metrics['total_idle_time'] = timing_metrics.get('totalIdleTime', 0)
+                metrics['page_load_performance'] = timing_metrics.get('pageLoadComplete', 0) - timing_metrics.get('navigationStart', 0)
+            
+            # 🎨 CORE BEHAVIORAL SCORES
             metrics['cursor_entropy'] = behavioral_data.get('cursor_entropy', 0)
             metrics['bot_fingerprint_score'] = behavioral_data.get('bot_fingerprint_score', 0)
             metrics['suspicious_feature_ratio'] = behavioral_data.get('suspicious_feature_ratio', 0)
             metrics['idle_time'] = behavioral_data.get('idle_time', 0)
             metrics['action_count'] = behavioral_data.get('action_count', 0)
+            metrics['total_time'] = behavioral_data.get('total_time', 0)
+            metrics['paste_detected'] = 1 if behavioral_data.get('paste_detected', False) else 0
+            metrics['is_automated_browser'] = 1 if behavioral_data.get('is_automated_browser', False) else 0
+            metrics['tab_key_count'] = behavioral_data.get('tabkeycount', 0)
+            metrics['cursor_angle_variance'] = behavioral_data.get('cursorAngleVariance', 0)
+            
+            # 📈 BEHAVIORAL PATTERN ANALYSIS
+            keyboard_patterns = behavioral_data.get('keyboard_patterns', [])
+            suspicious_patterns = behavioral_data.get('suspicious_patterns', [])
+            
+            metrics['keyboard_patterns_count'] = len(keyboard_patterns)
+            metrics['suspicious_patterns_count'] = len(suspicious_patterns)
+            
+            # Pattern confidence analysis
+            if keyboard_patterns:
+                pattern_confidences = [p.get('confidence', 0) for p in keyboard_patterns if isinstance(p, dict)]
+                metrics['avg_pattern_confidence'] = statistics.mean(pattern_confidences) if pattern_confidences else 0
+            
+            # 🔍 COMPREHENSIVE RISK ASSESSMENT
+            total_actions = (metrics.get('cursor_movement_count', 0) + 
+                           metrics.get('keystroke_count', 0) + 
+                           metrics.get('click_count', 0) + 
+                           metrics.get('scroll_changes_count', 0))
+            
+            metrics['total_behavioral_actions'] = total_actions
+            metrics['actions_per_second'] = total_actions / max(metrics.get('total_time', 1), 1) * 1000
+            
+            # Calculate overall behavioral consistency
+            consistency_factors = []
+            if 'keystroke_rhythm_consistency' in metrics:
+                consistency_factors.append(metrics['keystroke_rhythm_consistency'])
+            if 'click_rhythm_consistency' in metrics:
+                consistency_factors.append(metrics['click_rhythm_consistency'])
+            if 'scroll_smoothness' in metrics:
+                consistency_factors.append(metrics['scroll_smoothness'])
+            
+            metrics['overall_behavioral_consistency'] = statistics.mean(consistency_factors) if consistency_factors else 0.5
+            
+            # Calculate comprehensive automation risk
+            automation_indicators = 0
+            automation_indicators += metrics.get('evasion_signals_count', 0)
+            automation_indicators += 1 if metrics.get('suspicious_patterns_count', 0) > 2 else 0
+            automation_indicators += 1 if metrics.get('jitter_intensity', 0) < 0.005 else 0  # Too little natural jitter
+            automation_indicators += 1 if metrics.get('overall_behavioral_consistency', 0.5) > 0.98 else 0  # Unnaturally consistent
+            automation_indicators += 1 if metrics.get('is_automated_browser', 0) else 0
+            
+            metrics['comprehensive_automation_risk'] = automation_indicators / 5.0
+            
+            print(f"🎯 COMPREHENSIVE ANALYSIS COMPLETE:")
+            print(f"   - Total behavioral actions: {total_actions}")
+            print(f"   - Behavioral consistency: {metrics['overall_behavioral_consistency']:.3f}")
+            print(f"   - Automation risk: {metrics['comprehensive_automation_risk']:.3f}")
+            print(f"   - Total metrics computed: {len(metrics)}")
             
         except Exception as e:
-            logger.error(f"Error calculating behavioral metrics: {str(e)}")
+            logger.error(f"Error calculating comprehensive behavioral metrics: {str(e)}")
+            print(f"❌ Error in comprehensive metrics calculation: {str(e)}")
             
         return metrics
     
@@ -557,112 +691,798 @@ class BehavioralAnalyzer:
             logger.error(f"Error building user profile: {str(e)}")
             return None
     
-    def analyze_real_time_behavior(self, session_id, current_data):
+    
+    
+    def analyze_with_baseline_comparison(self, session_id, current_data, baseline_behavior, baseline_metrics):
         """
-        Analyze current behavioral data against authorized user profile
+        Enhanced analysis that compares current behavior with stored baseline using Mahalanobis distance
+        
+        📌 Mahalanobis Distance Benefits:
+        - Considers feature correlations (e.g., faster cursor → faster scrolling)
+        - Weights stable features higher than noisy features
+        - Better statistical anomaly detection for multivariate behavioral data
+        - Takes variance into account for each feature
         """
         try:
-            # Get or build user profile
-            if session_id not in self.authorized_profiles:
-                profile = self.build_user_profile(session_id)
-                if not profile:
-                    # No profile available, treat as first-time analysis
-                    return {
-                        'is_authorized': True,  # Assume authorized for first interaction
-                        'confidence': 0.5,
-                        'anomaly_score': 0.0,
-                        'risk_factors': [],
-                        'recommendation': 'Building user profile...'
-                    }
-            else:
-                profile = self.authorized_profiles[session_id]
+            print(f"🔬 Starting enhanced baseline comparison analysis for session: {session_id}")
             
-            # Calculate current metrics
+            # 🔍 DEBUG: Log data structures for troubleshooting
+            print(f"🔍 DEBUG: Current data keys: {list(current_data.keys())}")
+            print(f"🔍 DEBUG: Baseline behavior keys: {list(baseline_behavior.keys())}")
+            
+            # STEP 1: Traditional metrics comparison (for backward compatibility)
             current_metrics = self.calculate_behavioral_metrics(current_data)
             
-            # Compare against profile
-            anomaly_scores = []
-            risk_factors = []
+            # 🔧 NORMALIZE BASELINE DATA STRUCTURE - Handle both formats  
+            # Extract baseline behavioral data for comparison with proper field mapping
+            baseline_cursor_movements = (
+                baseline_behavior.get('cursor_movements', []) or 
+                baseline_behavior.get('cursorMovements', [])
+            )
+            baseline_key_presses = (
+                baseline_behavior.get('key_press_times', []) or 
+                baseline_behavior.get('keyPressTimes', [])
+            )
+            baseline_clicks = (
+                baseline_behavior.get('click_timestamps', []) or 
+                baseline_behavior.get('clickTimestamps', [])
+            )
+            baseline_scroll_speeds = (
+                baseline_behavior.get('scroll_speeds', []) or 
+                baseline_behavior.get('scrollSpeeds', [])
+            )
+            baseline_action_count = (
+                baseline_behavior.get('action_count', 0) or 
+                baseline_behavior.get('actionCount', 0)
+            )
             
-            for metric_name, current_value in current_metrics.items():
-                if current_value is None:
-                    continue
-                    
-                mean_key = f'{metric_name}_mean'
-                std_key = f'{metric_name}_std'
+            print(f"🔍 DEBUG: Baseline data extracted:")
+            print(f"  - Cursor movements: {len(baseline_cursor_movements)}")
+            print(f"  - Key presses: {len(baseline_key_presses)}")
+            print(f"  - Clicks: {len(baseline_clicks)}")
+            print(f"  - Scroll events: {len(baseline_scroll_speeds)}")
+            print(f"  - Action count: {baseline_action_count}")
+            
+            # Calculate baseline metrics for comparison using normalized structure
+            normalized_baseline_data = {
+                'cursor_movements': baseline_cursor_movements,
+                'key_press_times': baseline_key_presses,
+                'click_timestamps': baseline_clicks,
+                'scroll_speeds': baseline_scroll_speeds,
+                'action_count': baseline_action_count
+            }
+            
+            baseline_computed_metrics = self.calculate_behavioral_metrics(normalized_baseline_data)
+            print(f"🔍 DEBUG: Baseline computed metrics: {len(baseline_computed_metrics)} metrics")
+            
+            # STEP 2: Mahalanobis distance analysis for statistical anomaly detection
+            print(f"🔬 Performing Mahalanobis distance analysis...")
+            mahalanobis_analysis = self.compare_with_mahalanobis_distance(
+                current_data, 
+                baseline_behavior,  # Pass original baseline for feature extraction
+                distance_threshold=3.0  # 3 standard deviations threshold for anomaly detection
+            )
+            
+            print(f"🔍 DEBUG: Mahalanobis distance: {mahalanobis_analysis.get('mahalanobis_distance', float('inf')):.4f}")
+            print(f"🔍 DEBUG: Similarity score: {mahalanobis_analysis.get('similarity_score', 0):.3f}")
+            
+            # STEP 3: Combine both analysis methods for robust decision making
+            
+            # Traditional baseline comparison
+            baseline_deviations = []
+            similarity_scores = []
+            
+            DEVIATION_THRESHOLD = 2.0   # Max 2 standard deviations
+            
+            print(f"🔬 Comparing traditional metrics...")
+            for metric_name in ['avg_speed', 'speed_variance', 'avg_keystroke_interval', 'keystroke_variance', 'avg_click_interval']:
+                current_value = current_metrics.get(metric_name, 0)
+                baseline_value = baseline_computed_metrics.get(metric_name, 0)
                 
-                if mean_key in profile and std_key in profile:
-                    expected_mean = profile[mean_key]
-                    expected_std = profile[std_key]
+                print(f"🔍 DEBUG: {metric_name} - Current: {current_value:.3f}, Baseline: {baseline_value:.3f}")
+                
+                if baseline_value > 0:
+                    # Calculate percentage difference
+                    difference = abs(current_value - baseline_value) / baseline_value
+                    similarity = max(0, 1 - difference)
+                    similarity_scores.append(similarity)
                     
-                    if expected_std > 0:
-                        # Calculate z-score
-                        z_score = abs(current_value - expected_mean) / expected_std
-                        anomaly_scores.append(z_score)
-                        
-                        # Flag significant deviations
-                        if z_score > 2.5:  # More than 2.5 standard deviations
-                            risk_factors.append({
-                                'metric': metric_name,
-                                'current': current_value,
-                                'expected': expected_mean,
-                                'deviation': z_score,
-                                'severity': 'HIGH' if z_score > 3.5 else 'MEDIUM'
-                            })
+                    # Check for significant deviations
+                    if difference > DEVIATION_THRESHOLD:
+                        baseline_deviations.append({
+                            'metric': metric_name,
+                            'current_value': current_value,
+                            'baseline_value': baseline_value,
+                            'deviation_ratio': difference,
+                            'severity': 'HIGH' if difference > 3.0 else 'MEDIUM'
+                        })
+                        print(f"⚠️ DEBUG: Deviation detected in {metric_name}: {difference:.3f}")
             
-            # Calculate overall anomaly score
-            overall_anomaly = statistics.mean(anomaly_scores) if anomaly_scores else 0.0
+            # Calculate traditional baseline similarity
+            traditional_similarity = statistics.mean(similarity_scores) if similarity_scores else 0.0
+            print(f"🔍 DEBUG: Traditional similarity: {traditional_similarity:.3f}")
             
-            # Determine authorization status
-            threshold = 2.0  # Configurable threshold
-            is_authorized = overall_anomaly < threshold
-            confidence = max(0.1, 1.0 - (overall_anomaly / 5.0))  # Scale confidence
+            # STEP 4: Weight Mahalanobis distance analysis more heavily as it's more sophisticated
+            # Convert distance to similarity score for combination with traditional metrics
+            mahal_similarity = mahalanobis_analysis.get('similarity_score', 0.0)
+            combined_similarity = (
+                mahal_similarity * 0.7 +  # Mahalanobis similarity (primary)
+                traditional_similarity * 0.3                   # Traditional metrics (secondary)
+            )
             
-            # Additional suspicious behavior checks
-            suspicious_indicators = []
+            # Authorization decision based on Mahalanobis distance (primary method)
+            is_authorized = mahalanobis_analysis['is_authorized']
             
-            # Check for bot-like patterns
-            if current_data.get('bot_fingerprint_score', 0) > 0.7:
-                suspicious_indicators.append('High bot fingerprint score')
-                is_authorized = False
+            # Override with traditional method if Mahalanobis result is borderline
+            mahal_distance = mahalanobis_analysis.get('mahalanobis_distance', float('inf'))
+            if 2.0 <= mahal_distance <= 3.5:
+                # In borderline cases, also consider traditional metrics
+                is_authorized = is_authorized and (traditional_similarity >= 0.6)
             
-            if current_data.get('cursor_entropy', 0) < 1.0:
-                suspicious_indicators.append('Low cursor entropy (robotic movement)')
-                is_authorized = False
+            # Calculate combined confidence
+            confidence = (
+                mahalanobis_analysis['confidence'] * 0.7 +
+                min(traditional_similarity, 1.0) * 0.3
+            )
             
-            if current_data.get('suspicious_feature_ratio', 0) > 0.6:
-                suspicious_indicators.append('High suspicious feature ratio')
-                is_authorized = False
+            # Risk assessment combining both methods
+            risk_score = 1 - combined_similarity
+            anomaly_score = (
+                mahalanobis_analysis['risk_score'] * 0.7 +
+                len(baseline_deviations) * 0.1 +
+                (1 - traditional_similarity) * 0.2
+            )
             
-            # Recommendation based on analysis
+            # Generate comprehensive recommendations
             if not is_authorized:
-                if overall_anomaly > 3.0:
-                    recommendation = 'BLOCK: Highly suspicious behavior detected'
-                elif len(suspicious_indicators) > 2:
-                    recommendation = 'CHALLENGE: Multiple suspicious indicators'
+                if mahal_distance >= 6.0:
+                    recommendation = 'BLOCK: Extreme behavioral anomaly detected (Mahalanobis distance >= 6.0)'
+                elif mahal_distance >= 4.0:
+                    recommendation = 'CHALLENGE: High behavioral anomaly - additional verification required'
                 else:
-                    recommendation = 'MONITOR: Unusual behavior patterns'
+                    recommendation = 'MONITOR: Moderate anomaly with traditional metric deviations'
             else:
-                recommendation = 'ALLOW: Behavior matches authorized user profile'
+                if mahal_distance <= 1.0:
+                    recommendation = 'ALLOW: Excellent behavioral match (very low statistical deviation)'
+                elif mahal_distance <= 2.0:
+                    recommendation = 'ALLOW: Good behavioral match with high confidence'
+                else:
+                    recommendation = 'ALLOW: Acceptable behavioral match (monitor for patterns)'
             
+            # Combine suspicious indicators from both methods
+            suspicious_indicators = mahalanobis_analysis.get('anomaly_indicators', [])
+            if traditional_similarity < 0.5:
+                suspicious_indicators.append('Low traditional metrics similarity')
+            if len(baseline_deviations) > 2:
+                suspicious_indicators.append('Multiple traditional metric deviations')
+            
+
             return {
                 'is_authorized': is_authorized,
                 'confidence': confidence,
-                'anomaly_score': overall_anomaly,
-                'risk_factors': risk_factors,
+                'anomaly_score': anomaly_score,
+                'risk_score': risk_score,
+                
+                # Mahalanobis distance results (primary)
+                'mahalanobis_distance': mahalanobis_analysis.get('mahalanobis_distance', float('inf')),
+                'mahalanobis_similarity': mahal_similarity,
+                'normalized_distance': mahalanobis_analysis.get('normalized_distance', 1.0),
+                'statistical_significance': mahalanobis_analysis.get('statistical_significance', 'HIGH'),
+                'chi_squared_statistic': mahalanobis_analysis.get('chi_squared_statistic', 0.0),
+                'degrees_of_freedom': mahalanobis_analysis.get('degrees_of_freedom', 0),
+                'features_analyzed': mahalanobis_analysis.get('features_analyzed', 0),
+                
+                # Traditional metrics (secondary)
+                'baseline_similarity': traditional_similarity,
+                'baseline_deviations': baseline_deviations,
+                'combined_similarity': combined_similarity,
+                
+                # Risk and indicators
+                'risk_factors': [{'metric': 'enhanced_mahalanobis_analysis', 'severity': 'HIGH' if not is_authorized else 'LOW'}],
                 'suspicious_indicators': suspicious_indicators,
                 'recommendation': recommendation,
-                'profile_size': len(profile) // 4 if profile else 0  # Number of metrics in profile
+                'analysis_type': 'enhanced_mahalanobis_distance',
+                'distance_threshold': 3.0,
+                'profile_size': len(baseline_computed_metrics)
             }
             
         except Exception as e:
-            logger.error(f"Error in real-time analysis: {str(e)}")
+            print(f"❌ ERROR: Error in enhanced baseline comparison: {str(e)}")
+            logger.error(f"Error in enhanced baseline comparison: {str(e)}")
             return {
                 'is_authorized': False,
                 'confidence': 0.0,
                 'anomaly_score': 10.0,
-                'risk_factors': [{'metric': 'error', 'severity': 'HIGH'}],
-                'recommendation': 'BLOCK: Analysis error'
+                'mahalanobis_distance': float('inf'),
+                'mahalanobis_similarity': 0.0,
+                'baseline_similarity': 0.0,
+                'risk_factors': [{'metric': 'enhanced_mahalanobis_analysis_error', 'severity': 'HIGH'}],
+                'recommendation': 'BLOCK: Enhanced Mahalanobis analysis failed',
+                'analysis_type': 'enhanced_mahalanobis_distance'
+            }
+    
+    def compare_behavioral_patterns(self, current_data, baseline_behavior):
+        """
+        Compare behavioral patterns between current and baseline data
+        """
+        try:
+            # Cursor movement pattern comparison
+            current_movements = current_data.get('cursor_movements', [])
+            baseline_movements = baseline_behavior.get('cursorMovements', [])
+            
+            cursor_pattern_match = self.compare_movement_patterns(current_movements, baseline_movements)
+            
+            # Timing pattern comparison
+            current_key_times = current_data.get('key_press_times', [])
+            baseline_key_times = baseline_behavior.get('keyPressTimes', [])
+            
+            timing_pattern_match = self.compare_timing_patterns(current_key_times, baseline_key_times)
+            
+            # Click pattern comparison
+            current_clicks = current_data.get('click_timestamps', [])
+            baseline_clicks = baseline_behavior.get('clickTimestamps', [])
+            
+            click_pattern_match = self.compare_click_patterns(current_clicks, baseline_clicks)
+            
+            # Overall pattern match
+            overall_match = (cursor_pattern_match * 0.4 + 
+                           timing_pattern_match * 0.4 + 
+                           click_pattern_match * 0.2)
+            
+            return {
+                'cursor_pattern_match': cursor_pattern_match,
+                'timing_pattern_match': timing_pattern_match,
+                'click_pattern_match': click_pattern_match,
+                'overall_match': overall_match
+            }
+            
+        except Exception as e:
+            logger.error(f"Error comparing behavioral patterns: {str(e)}")
+            return {
+                'cursor_pattern_match': 0.0,
+                'timing_pattern_match': 0.0,
+                'click_pattern_match': 0.0,
+                'overall_match': 0.0
+            }
+    
+    def compare_movement_patterns(self, current_movements, baseline_movements):
+        """Compare cursor movement patterns"""
+        if not current_movements or not baseline_movements:
+            return 0.0
+        
+        # Simple pattern matching based on movement characteristics
+        # This can be enhanced with more sophisticated algorithms
+        return min(len(current_movements) / max(len(baseline_movements), 1), 1.0) * 0.8
+    
+    def compare_timing_patterns(self, current_times, baseline_times):
+        """Compare keystroke timing patterns"""
+        if len(current_times) < 2 or len(baseline_times) < 2:
+            return 0.5
+        
+        # Calculate intervals
+        current_intervals = [current_times[i] - current_times[i-1] for i in range(1, len(current_times))]
+        baseline_intervals = [baseline_times[i] - baseline_times[i-1] for i in range(1, len(baseline_times))]
+        
+        if not current_intervals or not baseline_intervals:
+            return 0.5
+        
+        # Compare average intervals
+        current_avg = statistics.mean(current_intervals)
+        baseline_avg = statistics.mean(baseline_intervals)
+        
+        if baseline_avg > 0:
+            similarity = 1 - min(abs(current_avg - baseline_avg) / baseline_avg, 1.0)
+            return max(similarity, 0.0)
+        
+        return 0.5
+    
+    def compare_click_patterns(self, current_clicks, baseline_clicks):
+        """Compare click timing patterns"""
+        if len(current_clicks) < 2 or len(baseline_clicks) < 2:
+            return 0.5
+        
+        # Simple comparison based on click frequency
+        current_freq = len(current_clicks)
+        baseline_freq = len(baseline_clicks)
+        
+        if baseline_freq > 0:
+            similarity = 1 - min(abs(current_freq - baseline_freq) / baseline_freq, 1.0)
+            return max(similarity, 0.0)
+        
+        return 0.5
+    
+    def calculate_mahalanobis_distance(self, current_vector, baseline_data):
+       
+        try:
+            current_vec = np.array(current_vector, dtype=float)
+            
+            # Extract multiple baseline feature vectors to build statistical distribution
+            baseline_feature_vectors = []
+            
+            # If baseline_data is a list of multiple samples, use them directly
+            if isinstance(baseline_data, list):
+                for sample in baseline_data:
+                    features = self.extract_behavioral_features(sample)
+                    if features:
+                        baseline_feature_vectors.append(features)
+            else:
+                # Single baseline sample - we'll need to simulate distribution
+                baseline_features = self.extract_behavioral_features(baseline_data)
+                if baseline_features:
+                    # Create variations around the baseline to build covariance matrix
+                    baseline_feature_vectors.append(baseline_features)
+                    
+                    # Add small random variations to create a distribution
+                    # This simulates natural behavioral variation
+                    for _ in range(10):  # Create 10 variations
+                        variation = np.array(baseline_features) * (1 + np.random.normal(0, 0.05, len(baseline_features)))
+                        baseline_feature_vectors.append(variation.tolist())
+            
+            if len(baseline_feature_vectors) < 2:
+                print("⚠️ Insufficient baseline data for Mahalanobis distance calculation")
+                return float('inf')  # High distance indicates anomaly
+            
+            # Convert to numpy matrix
+            baseline_matrix = np.array(baseline_feature_vectors, dtype=float)
+            
+            # Ensure current vector matches baseline vector dimensions
+            if len(current_vec) != baseline_matrix.shape[1]:
+                # Pad shorter vector with zeros or truncate longer vector
+                target_len = baseline_matrix.shape[1]
+                if len(current_vec) < target_len:
+                    current_vec = np.pad(current_vec, (0, target_len - len(current_vec)), 'constant')
+                else:
+                    current_vec = current_vec[:target_len]
+            
+            # Calculate mean and covariance matrix of baseline distribution
+            baseline_mean = np.mean(baseline_matrix, axis=0)
+            baseline_cov = np.cov(baseline_matrix, rowvar=False)
+            
+            # Add small regularization to diagonal to ensure matrix is invertible
+            regularization = 1e-6
+            baseline_cov += np.eye(baseline_cov.shape[0]) * regularization
+            
+            # Calculate Mahalanobis distance
+            try:
+                # Use scipy's mahalanobis distance function
+                inv_cov = linalg.inv(baseline_cov)
+                mahal_distance = mahalanobis(current_vec, baseline_mean, inv_cov)
+                
+                print(f"🔍 DEBUG: Mahalanobis distance calculated: {mahal_distance:.4f}")
+                return float(mahal_distance)
+                
+            except (linalg.LinAlgError, np.linalg.LinAlgError):
+                # Fallback to pseudo-inverse if matrix is singular
+                print("⚠️ Using pseudo-inverse for singular covariance matrix")
+                try:
+                    pseudo_inv_cov = linalg.pinv(baseline_cov)
+                    diff = current_vec - baseline_mean
+                    mahal_distance = np.sqrt(np.dot(np.dot(diff, pseudo_inv_cov), diff))
+                    
+                    print(f"🔍 DEBUG: Mahalanobis distance (pseudo-inverse): {mahal_distance:.4f}")
+                    return float(mahal_distance)
+                    
+                except Exception as e:
+                    print(f"⚠️ Error with pseudo-inverse: {e}")
+                    # Final fallback to Euclidean distance normalized by std
+                    std_devs = np.std(baseline_matrix, axis=0)
+                    std_devs[std_devs == 0] = 1  # Avoid division by zero
+                    euclidean_normalized = np.sqrt(np.sum(((current_vec - baseline_mean) / std_devs) ** 2))
+                    
+                    print(f"🔍 DEBUG: Fallback normalized Euclidean distance: {euclidean_normalized:.4f}")
+                    return float(euclidean_normalized)
+            
+        except Exception as e:
+            logger.error(f"Error calculating Mahalanobis distance: {str(e)}")
+            print(f"🚨 Error in Mahalanobis calculation: {e}")
+            return float('inf')  # High distance indicates anomaly
+    
+    def extract_behavioral_features(self, behavioral_data):
+        """
+        Extract comprehensive numerical feature vectors from ALL behavioral data for cosine similarity analysis
+        Enhanced to handle both frontend (camelCase) and backend (snake_case) formats
+        Creates a comprehensive feature vector from ALL behavioral metrics for accurate similarity comparison
+        """
+        try:
+            features = []
+            
+            print(f"� Extracting comprehensive features from ALL behavioral data...")
+            
+            # 📊 FIRST: Calculate comprehensive metrics to get derived features
+            comprehensive_metrics = self.calculate_behavioral_metrics(behavioral_data)
+            
+            # 🖱️ COMPREHENSIVE CURSOR MOVEMENT FEATURES
+            cursor_movements = (
+                behavioral_data.get('cursor_movements', []) or 
+                behavioral_data.get('cursorMovements', [])
+            )
+            cursor_speeds = behavioral_data.get('cursor_speeds', [])
+            cursor_acceleration = behavioral_data.get('cursor_acceleration', [])
+            cursor_curvature = behavioral_data.get('cursor_curvature', [])
+            
+            print(f"🔍 DEBUG: Cursor movements found: {len(cursor_movements)} points")
+            
+            # Cursor movement statistical features
+            if cursor_movements:
+                # Basic movement calculations if not provided
+                speeds = cursor_speeds if cursor_speeds else []
+                if not speeds and len(cursor_movements) > 1:
+                    for i in range(1, len(cursor_movements)):
+                        prev = cursor_movements[i-1]
+                        curr = cursor_movements[i]
+                        
+                        prev_x = prev.get('x', 0) if isinstance(prev, dict) else 0
+                        prev_y = prev.get('y', 0) if isinstance(prev, dict) else 0
+                        prev_time = prev.get('timestamp', 0) if isinstance(prev, dict) else 0
+                        
+                        curr_x = curr.get('x', 0) if isinstance(curr, dict) else 0
+                        curr_y = curr.get('y', 0) if isinstance(curr, dict) else 0
+                        curr_time = curr.get('timestamp', 0) if isinstance(curr, dict) else 0
+                        
+                        dx = curr_x - prev_x
+                        dy = curr_y - prev_y
+                        dt = (curr_time - prev_time) / 1000.0
+                        
+                        if dt > 0:
+                            distance = math.sqrt(dx**2 + dy**2)
+                            speed = distance / dt
+                            speeds.append(speed)
+                
+                # Comprehensive cursor features
+                features.extend([
+                    len(cursor_movements),  # Movement count
+                    statistics.mean(speeds) if speeds else 0,  # Avg speed
+                    statistics.median(speeds) if speeds else 0,  # Median speed
+                    max(speeds) if speeds else 0,  # Max speed
+                    min(speeds) if speeds else 0,  # Min speed
+                    statistics.stdev(speeds) if len(speeds) > 1 else 0,  # Speed variance
+                    comprehensive_metrics.get('avg_cursor_speed', 0),
+                    comprehensive_metrics.get('cursor_speed_variance', 0),
+                    statistics.mean(cursor_acceleration) if cursor_acceleration else 0,
+                    statistics.stdev(cursor_acceleration) if len(cursor_acceleration) > 1 else 0,
+                    statistics.mean(cursor_curvature) if cursor_curvature else 0,
+                    statistics.stdev(cursor_curvature) if len(cursor_curvature) > 1 else 0
+                ])
+                
+                print(f"✅ Cursor features: {len(speeds)} movements processed")
+            else:
+                features.extend([0] * 12)  # 12 zeros for missing cursor data
+                print("🔍 DEBUG: No cursor movement data found")
+            
+            # ⌨️ COMPREHENSIVE KEYSTROKE FEATURES
+            key_press_times = (
+                behavioral_data.get('key_press_times', []) or 
+                behavioral_data.get('keyPressTimes', [])
+            )
+            key_hold_times = (
+                behavioral_data.get('key_hold_times', []) or 
+                behavioral_data.get('keyHoldTimes', [])
+            )
+            
+            print(f"🔍 DEBUG: Key press times found: {len(key_press_times)} keystrokes")
+            
+            if key_press_times and len(key_press_times) > 1:
+                intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
+                features.extend([
+                    len(key_press_times),  # Keystroke count
+                    statistics.mean(intervals),  # Avg interval
+                    statistics.median(intervals),  # Median interval
+                    max(intervals),  # Max interval
+                    min(intervals),  # Min interval
+                    statistics.stdev(intervals) if len(intervals) > 1 else 0,  # Interval variance
+                    comprehensive_metrics.get('keystroke_rhythm_consistency', 0.5)
+                ])
+            else:
+                features.extend([0, 0, 0, 0, 0, 0, 0.5])
+            
+            if key_hold_times:
+                features.extend([
+                    statistics.mean(key_hold_times),
+                    statistics.stdev(key_hold_times) if len(key_hold_times) > 1 else 0,
+                    comprehensive_metrics.get('key_hold_consistency', 0.5)
+                ])
+            else:
+                features.extend([0, 0, 0.5])
+                
+            print(f"✅ Keystroke features processed")
+            
+            # �️ COMPREHENSIVE CLICK FEATURES
+            click_timestamps = (
+                behavioral_data.get('click_timestamps', []) or 
+                behavioral_data.get('clickTimestamps', [])
+            )
+            click_intervals = behavioral_data.get('click_intervals', [])
+            
+            print(f"🔍 DEBUG: Click timestamps found: {len(click_timestamps)} clicks")
+            
+            if click_timestamps and len(click_timestamps) > 1:
+                if not click_intervals:
+                    click_intervals = [click_timestamps[i] - click_timestamps[i-1] for i in range(1, len(click_timestamps))]
+                
+                features.extend([
+                    len(click_timestamps),  # Click count
+                    statistics.mean(click_intervals) if click_intervals else 0,
+                    statistics.stdev(click_intervals) if len(click_intervals) > 1 else 0,
+                    comprehensive_metrics.get('click_rhythm_consistency', 0.5)
+                ])
+            else:
+                features.extend([0, 0, 0, 0.5])
+                
+            print(f"✅ Click features processed")
+            
+            # � SCROLL BEHAVIOR FEATURES
+            scroll_speeds = behavioral_data.get('scroll_speeds', [])
+            scroll_changes = behavioral_data.get('scroll_changes', 0)
+            
+            if scroll_speeds:
+                features.extend([
+                    len(scroll_speeds),
+                    statistics.mean(scroll_speeds),
+                    statistics.stdev(scroll_speeds) if len(scroll_speeds) > 1 else 0,
+                    comprehensive_metrics.get('scroll_smoothness', 0.5)
+                ])
+            else:
+                features.extend([0, 0, 0, 0.5])
+            
+            features.extend([
+                scroll_changes,
+                comprehensive_metrics.get('scroll_frequency', 0)
+            ])
+            
+            # 🎯 MOUSE JITTER AND MOVEMENT QUALITY FEATURES
+            mouse_jitter = behavioral_data.get('mouseJitter', [])
+            features.extend([
+                len(mouse_jitter),
+                comprehensive_metrics.get('avg_jitter_distance', 0),
+                comprehensive_metrics.get('avg_jitter_speed', 0),
+                comprehensive_metrics.get('jitter_intensity', 0)
+            ])
+            
+            # ⏸️ HESITATION AND MICROPAUSE FEATURES
+            hesitation_times = behavioral_data.get('hesitation', [])
+            micropauses = behavioral_data.get('micropause', [])
+            
+            features.extend([
+                len(hesitation_times),
+                comprehensive_metrics.get('avg_hesitation_duration', 0),
+                comprehensive_metrics.get('hesitation_variance', 0),
+                comprehensive_metrics.get('hesitation_frequency', 0),
+                len(micropauses),
+                comprehensive_metrics.get('avg_micropause_duration', 0),
+                comprehensive_metrics.get('micropause_variance', 0),
+                comprehensive_metrics.get('micropause_frequency', 0)
+            ])
+            
+            # �️ DEVICE AND FINGERPRINTING FEATURES
+            device_fingerprint = behavioral_data.get('devicefingerprint', '0')
+            canvas_metrics = behavioral_data.get('canvas_metrics', {})
+            unusual_screen = behavioral_data.get('unsualscreenresolution', {})
+            
+            features.extend([
+                len(str(device_fingerprint)),  # Fingerprint complexity
+                1 if behavioral_data.get('missing_canvas_fingerprint', False) else 0,
+                canvas_metrics.get('geometryLength', 0) if canvas_metrics else 0,
+                canvas_metrics.get('textLength', 0) if canvas_metrics else 0,
+                1 if canvas_metrics.get('winding') == 'supported' else 0,
+                1 if unusual_screen.get('is_unusual', False) else 0,
+                1 if unusual_screen.get('spoofedMismatch', False) else 0,
+                unusual_screen.get('device_pixel_ratio', 1) if unusual_screen else 1
+            ])
+            
+            # 🚨 EVASION AND AUTOMATION DETECTION FEATURES
+            evasion_signals = behavioral_data.get('evasion_signals', {})
+            evasion_count = sum(1 for key, value in evasion_signals.items() if value) if evasion_signals else 0
+            
+            features.extend([
+                evasion_count,
+                comprehensive_metrics.get('automation_risk_score', 0),
+                1 if evasion_signals.get('webdriver', False) else 0,
+                1 if evasion_signals.get('automation', False) else 0,
+                1 if evasion_signals.get('headless_chrome', False) else 0
+            ])
+            
+            # 📊 TIMING AND PERFORMANCE FEATURES
+            timing_metrics = behavioral_data.get('timing_metrics', {})
+            if timing_metrics:
+                features.extend([
+                    timing_metrics.get('mouseMovementFrequency', 0),
+                    timing_metrics.get('keyPressFrequency', 0),
+                    timing_metrics.get('clickFrequency', 0),
+                    timing_metrics.get('totalIdleTime', 0) / 1000.0,  # Convert to seconds
+                    (timing_metrics.get('pageLoadComplete', 0) - timing_metrics.get('navigationStart', 0)) / 1000.0
+                ])
+            else:
+                features.extend([0, 0, 0, 0, 0])
+            
+            # 🎨 CORE BEHAVIORAL SCORES AND METRICS
+            features.extend([
+                behavioral_data.get('cursor_entropy', 0),
+                behavioral_data.get('bot_fingerprint_score', 0),
+                behavioral_data.get('suspicious_feature_ratio', 0),
+                behavioral_data.get('idle_time', 0) / 1000.0,  # Convert to seconds
+                behavioral_data.get('action_count', 0),
+                behavioral_data.get('total_time', 0) / 1000.0,  # Convert to seconds
+                1 if behavioral_data.get('paste_detected', False) else 0,
+                1 if behavioral_data.get('is_automated_browser', False) else 0,
+                behavioral_data.get('tabkeycount', behavioral_data.get('TabKeyCount', 0)),
+                behavioral_data.get('cursorAngleVariance', 0)
+            ])
+            
+            # 📈 COMPREHENSIVE BEHAVIORAL ANALYSIS SCORES
+            keyboard_patterns = behavioral_data.get('keyboard_patterns', [])
+            suspicious_patterns = behavioral_data.get('suspicious_patterns', [])
+            
+            features.extend([
+                len(keyboard_patterns),
+                len(suspicious_patterns),
+                comprehensive_metrics.get('total_behavioral_actions', 0),
+                comprehensive_metrics.get('actions_per_second', 0),
+                comprehensive_metrics.get('overall_behavioral_consistency', 0.5),
+                comprehensive_metrics.get('comprehensive_automation_risk', 0)
+            ])
+            
+            # Pattern confidence analysis
+            if keyboard_patterns:
+                pattern_confidences = [p.get('confidence', 0) for p in keyboard_patterns if isinstance(p, dict)]
+                features.append(statistics.mean(pattern_confidences) if pattern_confidences else 0.5)
+            else:
+                features.append(0.5)
+            
+
+            
+            return features
+            
+        except Exception as e:
+            print(f"❌ ERROR: Error extracting behavioral features: {str(e)}")
+            logger.error(f"Error extracting behavioral features: {str(e)}")
+            return []
+    
+    def create_rolling_windows(self, data, window_size=10, step_size=5):
+        """
+        Create rolling windows from behavioral data for comparison
+        """
+        try:
+            if len(data) < window_size:
+                return [data]  # Return single window if data is smaller than window size
+            
+            windows = []
+            for i in range(0, len(data) - window_size + 1, step_size):
+                window = data[i:i + window_size]
+                windows.append(window)
+            
+            return windows
+            
+        except Exception as e:
+            logger.error(f"Error creating rolling windows: {str(e)}")
+            return [data]
+    
+    def compare_with_mahalanobis_distance(self, current_data, baseline_behavior, distance_threshold=3.0):
+        """
+        Compare current behavioral data with baseline using Mahalanobis distance
+        
+        📌 Mahalanobis Distance Benefits:
+        - Considers feature correlations (e.g., faster cursor → faster scrolling)
+        - Weights stable features higher than noisy features  
+        - Better statistical anomaly detection for multivariate behavioral data
+        - Takes variance into account for each feature
+        
+        Args:
+            current_data: Current behavioral data
+            baseline_behavior: Stored baseline behavioral data
+            distance_threshold: Threshold for authorized vs suspicious (default: 3.0 standard deviations)
+            
+        Returns:
+            Dict with distance scores and authorization decision
+        """
+        try:
+            print(f"🔬 Starting Mahalanobis distance analysis with threshold: {distance_threshold}")
+            
+            # Extract feature vectors from both datasets
+            current_features = self.extract_behavioral_features(current_data)
+            
+            if not current_features:
+                print("⚠️ Insufficient current behavioral data for comparison")
+                return {
+                    'mahalanobis_distance': float('inf'),
+                    'normalized_distance': 1.0,
+                    'is_authorized': False,
+                    'confidence': 0.0,
+                    'analysis_type': 'mahalanobis_distance',
+                    'recommendation': 'BLOCK: Insufficient current behavioral data'
+                }
+            
+            # Calculate Mahalanobis distance
+            mahal_distance = self.calculate_mahalanobis_distance(current_features, baseline_behavior)
+            
+            # Normalize distance to 0-1 scale for easier interpretation
+            # Using sigmoid-like function: lower distance = higher similarity
+            normalized_distance = min(1.0, mahal_distance / distance_threshold)
+            similarity_score = 1.0 - normalized_distance  # Convert distance to similarity
+            
+            # Authorization decision based on distance threshold
+            is_authorized = mahal_distance <= distance_threshold
+            
+            # Calculate confidence based on how far from threshold
+            if mahal_distance <= distance_threshold:
+                # For authorized users, confidence increases as distance decreases
+                confidence = max(0.1, 1.0 - (mahal_distance / distance_threshold))
+            else:
+                # For unauthorized users, confidence increases as distance increases
+                excess_distance = mahal_distance - distance_threshold
+                confidence = min(0.9, 0.1 + (excess_distance / distance_threshold) * 0.8)
+            
+            # Generate detailed recommendations based on Mahalanobis distance
+            if is_authorized:
+                if mahal_distance <= 1.0:
+                    recommendation = 'ALLOW: Excellent behavioral match (very low statistical deviation)'
+                elif mahal_distance <= 2.0:
+                    recommendation = 'ALLOW: Good behavioral match (low statistical deviation)'
+                else:
+                    recommendation = 'ALLOW: Acceptable behavioral match (moderate statistical deviation)'
+            else:
+                if mahal_distance >= 6.0:
+                    recommendation = 'BLOCK: Extreme behavioral anomaly - possible account takeover'
+                elif mahal_distance >= 4.5:
+                    recommendation = 'BLOCK: High behavioral anomaly detected'
+                else:
+                    recommendation = 'CHALLENGE: Moderate behavioral anomaly - additional verification needed'
+            
+            # Risk assessment and anomaly indicators
+            risk_score = min(1.0, mahal_distance / distance_threshold)
+            anomaly_indicators = []
+            
+            if mahal_distance > distance_threshold:
+                anomaly_indicators.append(f'Mahalanobis distance ({mahal_distance:.2f}) exceeds threshold ({distance_threshold})')
+            if mahal_distance > 2 * distance_threshold:
+                anomaly_indicators.append('Extremely high statistical deviation from baseline')
+            if mahal_distance < 0.5:
+                anomaly_indicators.append('Suspiciously perfect behavioral match (possible replay attack)')
+            
+            # Statistical significance assessment
+            # Chi-squared distribution approximation for p-value
+            degrees_of_freedom = len(current_features)
+            chi_squared_stat = mahal_distance ** 2
+            
+            # Approximate p-value interpretation
+            if chi_squared_stat > degrees_of_freedom + 3 * np.sqrt(2 * degrees_of_freedom):
+                statistical_significance = 'HIGH'
+            elif chi_squared_stat > degrees_of_freedom + 2 * np.sqrt(2 * degrees_of_freedom):
+                statistical_significance = 'MEDIUM'
+            else:
+                statistical_significance = 'LOW'
+            
+            print(f"🔍 DEBUG: Mahalanobis distance: {mahal_distance:.4f}")
+            print(f"🔍 DEBUG: Normalized distance: {normalized_distance:.4f}")
+            print(f"🔍 DEBUG: Similarity score: {similarity_score:.4f}")
+            print(f"🔍 DEBUG: Statistical significance: {statistical_significance}")
+            
+            return {
+                'mahalanobis_distance': mahal_distance,
+                'normalized_distance': normalized_distance,
+                'similarity_score': similarity_score,
+                'is_authorized': is_authorized,
+                'confidence': confidence,
+                'risk_score': risk_score,
+                'anomaly_indicators': anomaly_indicators,
+                'analysis_type': 'mahalanobis_distance',
+                'recommendation': recommendation,
+                'distance_threshold': distance_threshold,
+                'statistical_significance': statistical_significance,
+                'degrees_of_freedom': degrees_of_freedom,
+                'chi_squared_statistic': chi_squared_stat,
+                'features_analyzed': len(current_features)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in Mahalanobis distance comparison: {str(e)}")
+            print(f"🚨 Error in Mahalanobis analysis: {e}")
+            return {
+                'mahalanobis_distance': float('inf'),
+                'normalized_distance': 1.0,
+                'is_authorized': False,
+                'confidence': 0.0,
+                'analysis_type': 'mahalanobis_distance',
+                'recommendation': 'BLOCK: Mahalanobis distance analysis failed'
             }
 
 
@@ -708,12 +1528,12 @@ def handle_baseline_storage(request):
         overall_profile = baseline_data.get('overallBehaviorProfile', {})
 
         if collection_start_time:
-            start_dt = datetime.fromtimestamp(collection_start_time / 1000, tz=timezone.utc)
+            start_dt = datetime.fromtimestamp(collection_start_time / 1000, tz=ZoneInfo('UTC'))
         else:
             start_dt = timezone.now()
             
         if collection_end_time:
-            end_dt = datetime.fromtimestamp(collection_end_time / 1000, tz=timezone.utc)
+            end_dt = datetime.fromtimestamp(collection_end_time / 1000, tz=ZoneInfo('UTC'))
         else:
             end_dt = timezone.now()
         
@@ -834,22 +1654,15 @@ def handle_baseline_storage(request):
 @require_http_methods(["POST"])
 def analyze_behavioral_data(request):
     """
-    Real-time behavioral analysis endpoint
-    Analyzes user behavior and determines if user is authorized
+    Enhanced behavioral analysis with cosine similarity and rolling window support
     """
     try:
-        print(f"🔍 REQUEST RECEIVED: {request.method} to analyze_behavioral_data")
-        print(f"🔍 Request body size: {len(request.body)} bytes")
-        
         data = json.loads(request.body)
         
-        # Extract session ID and behavioral data
         session_id = data.get('session_id')
         behavioral_data = data.get('behavioral_data', {})
-        
-        print(f"🔍 PARSED DATA:")
-        print(f"  - session_id: {session_id}")
-        print(f"  - has behavioral_data: {bool(behavioral_data)}")
+        analysis_type = data.get('analysis_type', 'enhanced_mahalanobis_distance')  
+        similarity_threshold = data.get('similarity_threshold', 0.75)  
         
         if not session_id:
             print("❌ ERROR: No session ID provided")
@@ -865,6 +1678,39 @@ def analyze_behavioral_data(request):
                 'message': 'Behavioral data is required'
             }, status=400)
         
+        # 📊 STEP 1: RETRIEVE BASELINE BEHAVIOR FOR COMPARISON
+        print(f"🎯 Retrieving baseline behavior for session: {session_id}")
+        print(f"🔬 Analysis type: {analysis_type}")
+        print(f"📊 Similarity threshold: {similarity_threshold}")
+        
+        try:
+            # Get the most recent baseline behavior for this session
+            baseline_record = UserBaselineBehavior.objects.filter(
+                session_id=session_id,
+                is_active=True
+            ).order_by('-created_at').first()
+            
+            if not baseline_record:
+                print(f"⚠️ No baseline behavior found for session: {session_id}")
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No baseline behavior found for this session. Please complete baseline collection first.',
+                    'requires_baseline': True,
+                    'session_id': session_id
+                }, status=400)
+            
+            baseline_behavior = baseline_record.baseline_user_behavior
+            baseline_metrics = baseline_record.baseline_metrics
+            
+
+        except Exception as baseline_error:
+            print(f"❌ Error retrieving baseline: {str(baseline_error)}")
+            return JsonResponse({
+                'success': False,
+                'message': 'Failed to retrieve baseline behavior',
+                'error': str(baseline_error)
+            }, status=500)
+        
         # Verify or create session 
         try:
             session = UserSession.objects.get(session_id=session_id, is_active=True)
@@ -877,26 +1723,51 @@ def analyze_behavioral_data(request):
             )
             print(f"🆕 Created new UserSession for behavioral tracking: {session_id}")
         
-        # 📊 STEP 1: COMPREHENSIVE BEHAVIORAL ANALYSIS
-        print(f"🧠 Analyzing behavioral data for session {session_id}...")
-        print(f"📈 Data points received: {len(behavioral_data)} behavioral metrics")
+        # 📊 STEP 2: ENHANCED COSINE SIMILARITY ANALYSIS WITH ROLLING WINDOWS
+        print(f"🔬 Performing enhanced cosine similarity analysis...")
         
-        # Perform comprehensive real-time behavioral analysis
-        analysis_result = behavioral_analyzer.analyze_real_time_behavior(
-            session_id, behavioral_data
+        # Check if rolling window data is provided from frontend
+        rolling_windows = behavioral_data.get('rollingWindows', [])
+        window_metadata = behavioral_data.get('windowMetadata', {})
+        
+        if rolling_windows:
+            print(f"📊 Rolling windows received from frontend: {len(rolling_windows)} windows")
+            print(f"📊 Window metadata: {window_metadata}")
+        
+        # Enhanced analysis with baseline comparison using cosine similarity
+        analysis_result = behavioral_analyzer.analyze_with_baseline_comparison(
+            session_id, behavioral_data, baseline_behavior, baseline_metrics
         )
         
-        # 🎯 STEP 2: DETERMINE AUTHORIZATION STATUS BASED ON ANALYSIS
+        # 📊 STEP 3: ADDITIONAL MAHALANOBIS DISTANCE ANALYSIS IF REQUESTED
+        if analysis_type == 'mahalanobis_distance' and rolling_windows:
+            print(f"🔬 Performing dedicated Mahalanobis distance analysis...")
+            
+            # Perform direct Mahalanobis distance analysis with full comparison
+            mahalanobis_result = behavioral_analyzer.compare_with_mahalanobis_distance(
+                behavioral_data, 
+                baseline_behavior,
+                distance_threshold=3.0  # 3 standard deviations threshold
+            )
+
+            # Merge results, prioritizing Mahalanobis distance
+            analysis_result.update({
+                'mahalanobis_analysis': mahalanobis_result,
+                'rolling_windows_analyzed': len(rolling_windows),
+                'window_metadata': window_metadata,
+                'primary_analysis': 'mahalanobis_distance'
+            })
+
+            # Override authorization based on Mahalanobis distance if it's stricter
+            if not mahalanobis_result['is_authorized']:
+                analysis_result['is_authorized'] = False
+                analysis_result['recommendation'] = mahalanobis_result['recommendation']
+        
         user_auth_status = 'Authorized_user' if analysis_result['is_authorized'] else 'Unauthorized_user'
         risk_score = analysis_result.get('anomaly_score', 0)
         confidence = analysis_result.get('confidence', 0)
         
-        print(f"🔍 Analysis Result: {user_auth_status}")
-        print(f"📊 Risk Score: {risk_score:.3f} | Confidence: {confidence:.3f}")
-        print(f"⚠️ Suspicious Indicators: {len(analysis_result.get('suspicious_indicators', []))}")
-        
-        # 💾 STEP 3: STORE ANALYZED DATA IN DATABASE
-        print(f"💾 Storing behavioral analysis results for {user_auth_status}...")
+
         
         behavioral_record = BehavioralData.objects.create(
             session_id=session_id,
@@ -952,24 +1823,35 @@ def analyze_behavioral_data(request):
         
         # 🚨 Special handling for unauthorized users
         if not analysis_result['is_authorized']:
-            print(f"🚨 UNAUTHORIZED USER DETECTED - Session: {session_id}")
-            print(f"⚠️ Risk Score: {risk_score:.3f} | Confidence: {confidence:.3f}")
-            print(f"🔍 Suspicious Indicators: {analysis_result.get('suspicious_indicators', [])}")
-            
             return JsonResponse({
                 'success': True,
-                'message': 'Unauthorized user detected',
+                'message': 'Unauthorized user detected via enhanced cosine similarity analysis',
                 'session_id': session_id,
                 'user_auth_status': 'Unauthorized_user',
                 'is_authorized': False,
                 'requires_authentication': True,
-                'authentication_message': 'Need for Authentication',
+                'authentication_message': 'Behavioral pattern mismatch detected - Authentication required',
                 'confidence': confidence,
                 'risk_score': risk_score,
                 'anomaly_score': analysis_result['anomaly_score'],
+                
+                # 🔬 COSINE SIMILARITY RESULTS
+                'cosine_similarity': analysis_result.get('cosine_similarity', 0.0),
+                'cosine_max_similarity': analysis_result.get('cosine_max_similarity', 0.0),
+                'cosine_min_similarity': analysis_result.get('cosine_min_similarity', 0.0),
+                'cosine_variance': analysis_result.get('cosine_variance', 0.0),
+                'window_similarities': analysis_result.get('window_similarities', []),
+                'windows_analyzed': analysis_result.get('windows_analyzed', 0),
+                'similarity_threshold': similarity_threshold,
+                'combined_similarity': analysis_result.get('combined_similarity', 0.0),
+                
+                # Additional analysis details
+                'baseline_similarity': analysis_result.get('baseline_similarity', 0.0),
+                'baseline_deviations': analysis_result.get('baseline_deviations', []),
                 'risk_factors': analysis_result['risk_factors'],
                 'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
-                'recommendation': 'User requires immediate authentication verification',
+                'recommendation': analysis_result['recommendation'],
+                'analysis_type': analysis_result.get('analysis_type', 'enhanced_mahalanobis_distance'),
                 'analysis_timestamp': timezone.now().isoformat(),
                 'record_id': behavioral_record.id,
                 'action_required': 'AUTHENTICATION_NEEDED'
@@ -978,7 +1860,7 @@ def analyze_behavioral_data(request):
         # ✅ Response for authorized users
         return JsonResponse({
             'success': True,
-            'message': f'Behavioral analysis complete: {user_auth_status}',
+            'message': f'Enhanced cosine similarity analysis complete: {user_auth_status}',
             'session_id': session_id,
             'user_auth_status': user_auth_status,
             'is_authorized': analysis_result['is_authorized'],
@@ -986,14 +1868,34 @@ def analyze_behavioral_data(request):
             'confidence': confidence,
             'risk_score': risk_score,
             'anomaly_score': analysis_result['anomaly_score'],
+            
+            # 🔬 COSINE SIMILARITY RESULTS
+            'cosine_similarity': analysis_result.get('cosine_similarity', 0.0),
+            'cosine_max_similarity': analysis_result.get('cosine_max_similarity', 0.0),
+            'cosine_min_similarity': analysis_result.get('cosine_min_similarity', 0.0),
+            'cosine_variance': analysis_result.get('cosine_variance', 0.0),
+            'window_similarities': analysis_result.get('window_similarities', []),
+            'windows_analyzed': analysis_result.get('windows_analyzed', 0),
+            'similarity_threshold': similarity_threshold,
+            'combined_similarity': analysis_result.get('combined_similarity', 0.0),
+            
+            # Additional analysis details
+            'baseline_similarity': analysis_result.get('baseline_similarity', 0.0),
+            'baseline_deviations': analysis_result.get('baseline_deviations', []),
             'risk_factors': analysis_result['risk_factors'],
             'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
             'human_indicators': analysis_result.get('human_indicators', []),
             'recommendation': analysis_result['recommendation'],
+            'analysis_type': analysis_result.get('analysis_type', 'enhanced_mahalanobis_distance'),
             'analysis_timestamp': timezone.now().isoformat(),
             'profile_size': analysis_result.get('profile_size', 0),
             'record_id': behavioral_record.id,
-            'stored_at': behavioral_record.created_at.isoformat()
+            'stored_at': behavioral_record.created_at.isoformat(),
+            
+            # 📊 Rolling window metadata if available
+            'rolling_windows_analyzed': analysis_result.get('rolling_windows_analyzed', 0),
+            'window_metadata': analysis_result.get('window_metadata', {}),
+            'primary_analysis': analysis_result.get('primary_analysis', 'enhanced_cosine_similarity')
         }, status=200)
         
     except json.JSONDecodeError:

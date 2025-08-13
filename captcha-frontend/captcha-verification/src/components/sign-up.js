@@ -161,7 +161,7 @@ const Sign_Up = () => {
       setIsCollectingBaseline(false);
       setBaselineCompleted(true);
       setContinuousTransmissionActive(true);
-      setMessage('✅ Background baseline collection completed (20s). Baseline sent to backend. Continuous monitoring active.');
+      // No message shown - baseline collection is silent and invisible
     };
     
     // Also listen for manual baseline completion (for backward compatibility)
@@ -2595,7 +2595,7 @@ useEffect(() => {
     return patterns;
   };
 
-  // 🎯 Updated function - no longer manually starts baseline collection
+  // 🎯 Updated function - baseline collection is now completely silent and invisible
   const handleVerifyClick = async (e) => {
     console.log("*** VERIFY BUTTON CLICKED ***");
     
@@ -2609,28 +2609,7 @@ useEffect(() => {
     // Prevent default form submission
     e.preventDefault();
     
-    // Check if baseline collection is still in progress (running in background)
-    if (isCollectingBaseline) {
-      setMessage('⏳ Background baseline collection in progress. Please wait for completion...');
-      return;
-    }
-    
-    // Check if baseline has completed and continuous transmission is active
-    if (baselineCompleted && continuousTransmissionActive) {
-      // If baseline is already completed, proceed to normal form submission
-      console.log("✅ Background baseline completed, proceeding to form submission...");
-      await submitForm(e);
-      return;
-    }
-    
-    // If baseline hasn't completed yet, inform user to wait
-    if (!baselineCompleted) {
-      setMessage('⏳ Please wait for background baseline collection to complete (takes 20 seconds from page load)...');
-      return;
-    }
-    
-    // Fallback - should not reach here
-    console.warn("Unexpected state in handleVerifyClick");
+    // Always proceed with form submission - baseline collection is silent and invisible to user
     await submitForm(e);
   };
 
@@ -3132,35 +3111,12 @@ useEffect(() => {
           transition: 'all 0.3s ease'
         }}
       >
-        {isCollectingBaseline ? '⏳ Collecting Baseline...' : 
-         baselineCompleted ? '✅ Verify' : 'Verify'}
+        Verify
       </button>
         <p>Already Have an Account? <a href="/sign-in">Sign In</a></p>
       <p className={isBlocked ? "error-message" : ""}>{message}</p>
 
-      {/* Baseline Collection and Transmission Status */}
-      {(isCollectingBaseline || baselineCompleted || continuousTransmissionActive) && (
-        <div style={{ 
-          marginTop: '15px', 
-          padding: '12px', 
-          backgroundColor: isCollectingBaseline ? '#fff3cd' : baselineCompleted ? '#d4edda' : '#d1ecf1', 
-          borderRadius: '6px',
-          border: `1px solid ${isCollectingBaseline ? '#ffeaa7' : baselineCompleted ? '#c3e6cb' : '#bee5eb'}`,
-          fontSize: '14px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            {isCollectingBaseline && '🎯 Baseline Collection In Progress'}
-            {baselineCompleted && !continuousTransmissionActive && '✅ Baseline Collection Completed'}
-            {continuousTransmissionActive && '🔄 Continuous Monitoring Active'}
-          </div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            {isCollectingBaseline && 'Please interact normally with the page for 20 seconds...'}
-            {baselineCompleted && !continuousTransmissionActive && 'Sending baseline data to backend...'}
-            {continuousTransmissionActive && 'Sending behavioral data to backend every 1 second (no gaps)'}
-          </div>
-        </div>
-      )}
+      {/* Baseline collection is now completely silent and invisible to user */}
 
       {/* Global Session Statistics Display */}
       {Object.keys(sessionStats).length > 0 && (

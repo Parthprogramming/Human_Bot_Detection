@@ -144,9 +144,15 @@ class GlobalBehavioralTracker {
     
     // Storage keys
     this.STORAGE_KEY = 'global_behavioral_session';
-    this.SESSION_KEY = 'behavioral_session_id';
+    this.SESSION_KEY = 'session_id';
     
-    this.init();
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.init());
+    } else {
+      // DOM is already ready
+      setTimeout(() => this.init(), 0);
+    }
   }
   
   init() {
@@ -154,6 +160,9 @@ class GlobalBehavioralTracker {
     
     // Load existing session or create new one
     this.loadSession();
+    
+    // 🔍 COLLECT DEVICE FINGERPRINT AND EVASION SIGNALS
+    this.collectDeviceFingerprint();
     
     // Start global tracking
     this.startGlobalTracking();
@@ -168,14 +177,6 @@ class GlobalBehavioralTracker {
     this.startBackgroundBaselineCollection();
 
     this.isInitialized = true;
-    console.log('🚀 Global Behavioral Tracker initialized with background baseline collection');
-    
-    // Show baseline status
-    if (this.behavioralData.isCollectingBaseline) {
-      console.log('✅ Baseline collection is ACTIVE - Duration:', this.behavioralData.baselineCollectionDuration/1000, 'seconds');
-    } else if (this.behavioralData.baselineCompleted) {
-      console.log('ℹ️ Baseline already completed. To restart: window.globalBehavioralTrackerInstance.debugForceStartBaseline()');
-    }
   }
   
   loadSession() {
@@ -183,6 +184,15 @@ class GlobalBehavioralTracker {
       // Check for existing session ID
       const existingSessionId = localStorage.getItem(this.SESSION_KEY);
       const existingData = localStorage.getItem(this.STORAGE_KEY);
+      
+      // 🔄 DETECT OLD SESSION FORMAT AND FORCE NEW SESSION
+      if (existingSessionId && existingSessionId.startsWith('behavioral_')) {
+        console.log('🔄 Detected old session format, forcing new session generation...');
+        localStorage.removeItem(this.SESSION_KEY);
+        localStorage.removeItem(this.STORAGE_KEY);
+        this.createNewSession();
+        return;
+      }
       
       if (existingSessionId && existingData) {
         // Continue existing session
@@ -246,6 +256,22 @@ class GlobalBehavioralTracker {
     this.behavioralData.sessionId = this.sessionId;
     this.behavioralData.trackingStartTime = this.trackingStartTime;
     localStorage.setItem(this.SESSION_KEY, this.sessionId);
+    console.log('🔄 Generated new professional session ID:', this.sessionId);
+  }
+  
+  // 🔧 DEBUG: Force generate new session ID (clears old format)
+  debugForceNewSession() {
+    console.warn('🔧 DEBUG: Forcing new session generation...');
+    localStorage.removeItem(this.SESSION_KEY);
+    localStorage.removeItem(this.STORAGE_KEY);
+    this.createNewSession();
+    console.log('🔧 New session ID generated:', this.sessionId);
+    return this.sessionId;
+  }
+  
+  // Save session data to localStorage
+  saveSession() {
+    this.saveToStorage();
   }
 
   // 🎯 CRITICAL: Recover baseline timer after page navigation/reload
@@ -336,8 +362,22 @@ class GlobalBehavioralTracker {
       collecting: data.isCollectingBaseline,
       completed: data.baselineCompleted,
       startTime: data.baselineCollectionStartTime,
-      hasData: !!data.baselineBehaviorData
+      hasData: !!data.baselineBehaviorData,
+      timerId: this.baselineTimerId,
+      sessionId: this.sessionId
     });
+    
+    // Check localStorage state
+    const storedData = localStorage.getItem(this.STORAGE_KEY);
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      console.log('🔧 STORED STATE:', {
+        collecting: parsed.isCollectingBaseline,
+        completed: parsed.baselineCompleted,
+        startTime: parsed.baselineCollectionStartTime
+      });
+    }
+    
     return data;
   }
 
@@ -369,6 +409,65 @@ class GlobalBehavioralTracker {
     
     this.completeBackgroundBaselineCollection();
     return this;
+  }
+  
+  // 🔧 DEBUG: Test payload format without full baseline collection
+  debugTestPayloadFormat() {
+    console.warn('🔧 DEBUG: Testing baseline payload format...');
+    
+    // Create minimal test baseline data
+    const testBaselineData = {
+      collectionStartTime: Date.now() - 20000,
+      collectionEndTime: Date.now(),
+      cursorMovements: [
+        {x: 100, y: 150, timestamp: Date.now() - 19000},
+        {x: 120, y: 160, timestamp: Date.now() - 18000}
+      ],
+      keyPressTimes: [Date.now() - 17000, Date.now() - 16000],
+      clickTimestamps: [Date.now() - 15000],
+      scrollSpeeds: [10, 15],
+      actionCount: 5
+    };
+    
+    const payload = {
+      session_id: this.sessionId,
+      baseline_data: {
+        ...testBaselineData,
+        metrics: {avgSpeed: 25.5, totalActions: 5},
+        sessionId: this.sessionId,
+        timestamp: Date.now(),
+        currentPage: 'test-page'
+      }
+    };
+    
+    console.log('🔧 Test payload format:', JSON.stringify(payload, null, 2));
+    return payload;
+  }
+  
+  // 🔧 DEBUG: Force immediate baseline transmission (for testing)
+  debugSendTestBaseline() {
+    console.warn('🔧 DEBUG: Sending test baseline to backend...');
+    
+    // Create test baseline data
+    const testPayload = this.debugTestPayloadFormat();
+    
+    // Send to backend
+    return fetch('http://127.0.0.1:8000/user/baseline-storage/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(testPayload)
+    }).then(response => {
+      console.log('🔧 Test baseline response status:', response.status);
+      return response.json();
+    }).then(result => {
+      console.log('🔧 Test baseline result:', result);
+      return result;
+    }).catch(error => {
+      console.error('🔧 Test baseline error:', error);
+      throw error;
+    });
   }
   
   // 🛡️ Defensive programming - Ensure all essential arrays are initialized
@@ -413,7 +512,43 @@ class GlobalBehavioralTracker {
   }
   
   generateSessionId() {
-    return 'behavioral_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+    
+    const timestamp = Date.now().toString(36); // Base36 timestamp
+    
+    // Generate cryptographically secure random string
+    const array = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) {
+      window.crypto.getRandomValues(array);
+    } else {
+      // Fallback for older browsers
+      for (let i = 0; i < array.length; i++) {
+        array[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    
+    const randomString = Array.from(array, byte => byte.toString(36).padStart(2, '0')).join('').substring(0, 12);
+    
+    // Browser fingerprint component
+    const userAgent = navigator.userAgent || '';
+    const screen = `${window.screen.width}x${window.screen.height}`;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const language = navigator.language || 'en';
+    
+    // Create a simple hash of browser characteristics
+    const browserData = `${userAgent}${screen}${timezone}${language}`;
+    let fingerprint = 0;
+    for (let i = 0; i < browserData.length; i++) {
+      fingerprint = ((fingerprint << 5) - fingerprint + browserData.charCodeAt(i)) & 0xffffffff;
+    }
+    const fingerprintHex = Math.abs(fingerprint).toString(36).substring(0, 8);
+    
+    // Additional entropy from performance and timing
+    const performanceNow = performance.now().toString().replace('.', '');
+    const entropy = performanceNow.substring(-6) + Math.random().toString(36).substring(2, 8);
+    
+    // Combine components: timestamp-random-fingerprint-entropy
+    return `${timestamp}-${randomString}-${fingerprintHex}-${entropy}`;
   }
   
   startGlobalTracking() {
@@ -426,7 +561,6 @@ class GlobalBehavioralTracker {
       this.trackMouseMovement(event);
     };
     
-    // Keyboard tracking
     const handleKeyDown = (event) => {
       this.trackKeyDown(event);
     };
@@ -465,6 +599,141 @@ class GlobalBehavioralTracker {
     element.addEventListener(event, handler);
     this.eventListeners.push({ element, event, handler });
   }
+
+  // 🔍 COMPREHENSIVE DEVICE FINGERPRINTING FOR ALL DJANGO FIELDS
+  collectDeviceFingerprint() {
+    try {
+      // 📱 Basic device fingerprint
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('Device fingerprint test 🎯', 2, 2);
+      const canvasFingerprint = canvas.toDataURL();
+      
+      // 🎯 DEVICE FINGERPRINT STRING
+      this.behavioralData.deviceFingerprint = this.createHashFromString(
+        navigator.userAgent + window.screen.width + window.screen.height + canvasFingerprint
+      );
+      
+      // 🖼️ CANVAS METRICS
+      this.behavioralData.canvasMetrics = {
+        winding: ctx.isPointInPath ? 'supported' : 'not_supported',
+        geometryLength: canvasFingerprint.length,
+        textLength: navigator.userAgent.length,
+        canvasFingerprint: canvasFingerprint.substring(0, 100) // First 100 chars
+      };
+      
+      // 🎨 GPU INFO
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        this.behavioralData.gpuInfo = {
+          gpu_name: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'unknown',
+          vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'unknown',
+          renderer: gl.getParameter(gl.RENDERER),
+          webgl_info: gl.getParameter(gl.VERSION),
+          capabilities: {
+            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+            maxViewportDims: gl.getParameter(gl.MAX_VIEWPORT_DIMS)
+          },
+          extensions: gl.getSupportedExtensions() || [],
+          driver_info: navigator.userAgent,
+          graphics_api: 'WebGL'
+        };
+      } else {
+        this.behavioralData.missingCanvasFingerprint = true;
+        this.behavioralData.gpuInfo = {
+          gpu_name: 'webgl_not_supported',
+          vendor: 'unknown',
+          renderer: 'unknown',
+          webgl_info: 'not_available',
+          capabilities: null,
+          extensions: [],
+          driver_info: navigator.userAgent,
+          graphics_api: 'none'
+        };
+      }
+      
+      // 📺 SCREEN RESOLUTION ANALYSIS
+      const screenInfo = {
+        width_height: `${window.screen.width}x${window.screen.height}`,
+        inner_width: window.innerWidth,
+        device_pixel_ratio: window.devicePixelRatio || 1,
+        aspect_ratio: (window.screen.width / window.screen.height).toFixed(2)
+      };
+      
+      // Detect unusual screen resolutions (common bot resolutions)
+      const commonResolutions = ['1920x1080', '1366x768', '1536x864', '1440x900', '1280x720'];
+      const isUnusual = !commonResolutions.includes(screenInfo.width_height);
+      
+      this.behavioralData.unusualScreenResolution = {
+        ...screenInfo,
+        is_unusual: isUnusual,
+        spoofedMismatch: Math.abs(window.innerWidth - window.screen.width) > 100, // Detect potential spoofing
+        aspectRatio: parseFloat(screenInfo.aspect_ratio)
+      };
+      
+      // 🕵️ EVASION SIGNALS DETECTION
+      this.behavioralData.evasionSignals = {
+        // Automation detection
+        webdriver: navigator.webdriver || false,
+        automation: window.chrome && window.chrome.runtime && window.chrome.runtime.onConnect,
+        phantom: window.callPhantom || window._phantom,
+        selenium: window.selenium || document.$cdc_asdjflasutopfhvcZLmcfl_,
+        
+        // Browser inconsistencies
+        languages_mismatch: navigator.language !== navigator.languages[0],
+        plugins_empty: navigator.plugins.length === 0,
+        webgl_disabled: !gl,
+        
+        // Timing inconsistencies
+        performance_now_precision: performance.now() % 1 === 0, // Perfect milliseconds = suspicious
+        
+        // User agent analysis
+        headless_chrome: navigator.userAgent.includes('HeadlessChrome'),
+        automation_keywords: /PhantomJS|Selenium|WebDriver|ChromeDriver/.test(navigator.userAgent)
+      };
+      
+      // 📊 TIMING METRICS INITIALIZATION
+      this.behavioralData.timingMetrics = {
+        trackingStartTime: Date.now(),
+        domContentLoaded: performance.timing ? performance.timing.domContentLoaded : Date.now(),
+        pageLoadComplete: performance.timing ? performance.timing.loadEventEnd : Date.now(),
+        navigationStart: performance.timing ? performance.timing.navigationStart : Date.now(),
+        firstPaint: performance.getEntriesByType ? 
+          (performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0) : 0,
+        mouseMovementFrequency: 0,
+        keyPressFrequency: 0,
+        clickFrequency: 0
+      };
+      
+      console.log('🔍 Device fingerprinting completed:', {
+        deviceFingerprint: this.behavioralData.deviceFingerprint,
+        gpuSupported: !!gl,
+        screenResolution: screenInfo.width_height,
+        evasionSignals: Object.keys(this.behavioralData.evasionSignals).filter(
+          key => this.behavioralData.evasionSignals[key]
+        )
+      });
+      
+    } catch (error) {
+      console.error('❌ Error collecting device fingerprint:', error);
+      this.behavioralData.deviceFingerprint = '0';
+      this.behavioralData.missingCanvasFingerprint = true;
+    }
+  }
+
+  // Helper function to create hash from string
+  createHashFromString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
   
   removeAllEventListeners() {
     this.eventListeners.forEach(({ element, event, handler }) => {
@@ -495,13 +764,36 @@ class GlobalBehavioralTracker {
     // Throttle mouse tracking
     if (now - this.behavioralData.lastUpdateTime < 50) return;
     
+    // 🕰️ DETECT HESITATION PATTERNS - pauses between movements
+    if (this.behavioralData.lastMouseMove) {
+      const timeSinceLastMove = now - this.behavioralData.lastMouseMove.timestamp;
+      
+      // Detect hesitation (pause between 200ms - 2000ms during active interaction)
+      if (timeSinceLastMove > 200 && timeSinceLastMove < 2000) {
+        this.behavioralData.hesitationTimes.push({
+          duration: timeSinceLastMove,
+          timestamp: now,
+          beforeAction: 'mouseMove'
+        });
+      }
+      
+      // Detect micropause (very short pauses 50ms - 200ms)
+      if (timeSinceLastMove > 50 && timeSinceLastMove < 200) {
+        this.behavioralData.microPauses.push({
+          duration: timeSinceLastMove,
+          timestamp: now,
+          beforeAction: 'mouseMove'
+        });
+      }
+    }
+    
     // Store movement with page context
     this.behavioralData.cursorMovements = [
       ...this.behavioralData.cursorMovements.slice(-499), // Keep last 500 movements
       newPoint
     ];
     
-    // Calculate speed if we have previous movement
+    // Calculate speed and advanced metrics if we have previous movement
     if (this.behavioralData.lastMouseMove) {
       const dx = newPoint.x - this.behavioralData.lastMouseMove.x;
       const dy = newPoint.y - this.behavioralData.lastMouseMove.y;
@@ -517,9 +809,43 @@ class GlobalBehavioralTracker {
             speed
           ];
           this.behavioralData.latestSpeed = speed;
+          
+          // 📊 CALCULATE CURSOR ACCELERATION
+          if (this.behavioralData.cursorSpeeds.length > 1) {
+            const prevSpeed = this.behavioralData.cursorSpeeds[this.behavioralData.cursorSpeeds.length - 2];
+            const acceleration = (speed - prevSpeed) / dt;
+            this.behavioralData.cursorAcceleration.push(acceleration);
+          }
+          
+          // 📈 CALCULATE CURSOR CURVATURE (angular change)
+          if (this.behavioralData.cursorMovements.length > 2) {                   
+            const prevMovement = this.behavioralData.cursorMovements[this.behavioralData.cursorMovements.length - 2];
+            const currentAngle = Math.atan2(dy, dx);
+            const prevDx = prevMovement.x - (this.behavioralData.cursorMovements[this.behavioralData.cursorMovements.length - 3] || {x: 0}).x;
+            const prevDy = prevMovement.y - (this.behavioralData.cursorMovements[this.behavioralData.cursorMovements.length - 3] || {y: 0}).y;
+            const prevAngle = Math.atan2(prevDy, prevDx);
+            const curvature = Math.abs(currentAngle - prevAngle);
+            this.behavioralData.cursorCurvature.push(curvature);
+            this.behavioralData.cursorAngles.push(currentAngle);
+          }
+          
+          // 🎯 DETECT MOUSE JITTER (rapid small movements)
+          if (distance < 5 && speed > 100) { // Small distance but high speed = jitter
+            this.behavioralData.mouseJitter.push({
+              timestamp: now,
+              distance: distance,
+              speed: speed,
+              coordinates: {x: newPoint.x, y: newPoint.y}
+            });
+          }
         }
       }
     }
+    
+    // 📊 UPDATE TIMING METRICS
+    this.behavioralData.timingMetrics.lastMouseMove = now;
+    this.behavioralData.timingMetrics.mouseMovementFrequency = 
+      (this.behavioralData.timingMetrics.mouseMovementFrequency || 0) + 1;
     
     this.behavioralData.lastMouseMove = newPoint;
     this.behavioralData.lastUpdateTime = now;
@@ -536,6 +862,31 @@ class GlobalBehavioralTracker {
       this.behavioralData.lastKeyDown = {};
     }
     
+    // 🕰️ DETECT HESITATION PATTERNS in typing
+    if (this.behavioralData.lastKeyPress) {
+      const timeSinceLastKey = now - this.behavioralData.lastKeyPress;
+      
+      // Detect typing hesitation (pause between 300ms - 3000ms)
+      if (timeSinceLastKey > 300 && timeSinceLastKey < 3000) {
+        this.behavioralData.hesitationTimes.push({
+          duration: timeSinceLastKey,
+          timestamp: now,
+          beforeAction: 'keyPress',
+          key: event.key
+        });
+      }
+      
+      // Detect typing micropause (pause between 100ms - 300ms)
+      if (timeSinceLastKey > 100 && timeSinceLastKey < 300) {
+        this.behavioralData.microPauses.push({
+          duration: timeSinceLastKey,
+          timestamp: now,
+          beforeAction: 'keyPress',
+          key: event.key
+        });
+      }
+    }
+    
     this.behavioralData.lastKeyDown[event.key] = now;
     
     // 🎯 RECORD BASELINE EVENT if collecting baseline
@@ -543,10 +894,41 @@ class GlobalBehavioralTracker {
       this.recordBaselineEvent('keyPress', event, now);
     }
     
+    // 📊 TRACK KEYBOARD PATTERNS
+    this.behavioralData.keyPressTimes.push(now);
+    
+    // Detect keyboard patterns (rapid keystrokes, rhythm analysis)
+    if (this.behavioralData.keyPressTimes.length > 1) {
+      const intervals = [];
+      for (let i = 1; i < Math.min(this.behavioralData.keyPressTimes.length, 10); i++) {
+        intervals.push(this.behavioralData.keyPressTimes[i] - this.behavioralData.keyPressTimes[i-1]);
+      }
+      
+      // Detect mechanical patterns (too regular intervals)
+      if (intervals.length > 5) {
+        const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+        const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
+        
+        if (variance < 100 && avgInterval < 200) { // Very regular and fast = suspicious
+          this.behavioralData.suspiciousPatterns.push({
+            type: 'mechanical_typing',
+            timestamp: now,
+            metrics: { avgInterval, variance }
+          });
+        }
+      }
+    }
+    
     if (event.key === 'Tab') {
       this.behavioralData.TabKeyCount++;
     }
     
+    // 📊 UPDATE TIMING METRICS
+    this.behavioralData.timingMetrics.lastKeyPress = now;
+    this.behavioralData.timingMetrics.keyPressFrequency = 
+      (this.behavioralData.timingMetrics.keyPressFrequency || 0) + 1;
+    
+    this.behavioralData.lastKeyPress = now;
     this.behavioralData.actionCount++;
     this.behavioralData.lastActionTime = now;
   }
@@ -580,19 +962,55 @@ class GlobalBehavioralTracker {
       this.recordBaselineEvent('click', event, now);
     }
     
+    // 🕰️ DETECT HESITATION PATTERNS before clicks
+    if (this.behavioralData.lastClickTime) {
+      const timeSinceLastClick = now - this.behavioralData.lastClickTime;
+      
+      // Detect click hesitation (pause between 500ms - 5000ms)
+      if (timeSinceLastClick > 500 && timeSinceLastClick < 5000) {
+        this.behavioralData.hesitationTimes.push({
+          duration: timeSinceLastClick,
+          timestamp: now,
+          beforeAction: 'click',
+          coordinates: {x: event.clientX, y: event.clientY}
+        });
+      }
+    }
+    
     this.behavioralData.clickTimestamps = [
       ...this.behavioralData.clickTimestamps.slice(-99),
       now
     ];
     
-    // Calculate click intervals
+    // Calculate click intervals and detect patterns
     if (this.behavioralData.lastClickTime) {
       const interval = now - this.behavioralData.lastClickTime;
       this.behavioralData.clickTimes = [
         ...this.behavioralData.clickTimes.slice(-99),
         interval
       ];
+      
+      // 🤖 DETECT ROBOTIC CLICKING PATTERNS
+      if (this.behavioralData.clickTimes.length > 3) {
+        const recentIntervals = this.behavioralData.clickTimes.slice(-5);
+        const avgInterval = recentIntervals.reduce((sum, int) => sum + int, 0) / recentIntervals.length;
+        const variance = recentIntervals.reduce((sum, int) => sum + Math.pow(int - avgInterval, 2), 0) / recentIntervals.length;
+        
+        // Very regular intervals suggest automation
+        if (variance < 50 && avgInterval < 1000) {
+          this.behavioralData.suspiciousPatterns.push({
+            type: 'mechanical_clicking',
+            timestamp: now,
+            metrics: { avgInterval, variance }
+          });
+        }
+      }
     }
+    
+    // 📊 UPDATE TIMING METRICS
+    this.behavioralData.timingMetrics.lastClick = now;
+    this.behavioralData.timingMetrics.clickFrequency = 
+      (this.behavioralData.timingMetrics.clickFrequency || 0) + 1;
     
     this.behavioralData.lastClickTime = now;
     this.behavioralData.actionCount++;
@@ -726,6 +1144,20 @@ class GlobalBehavioralTracker {
       // Update session time
       this.behavioralData.totalSessionTime = Date.now() - this.trackingStartTime;
       
+      // 📊 CALCULATE CURRENT IDLE TIME
+      const now = Date.now();
+      const timeSinceLastAction = now - this.behavioralData.lastActionTime;
+      
+      // Update idle time if user has been inactive for more than 2 seconds
+      if (timeSinceLastAction > 2000) {
+        this.behavioralData.idleTime += Math.min(timeSinceLastAction, 30000); // Cap at 30 seconds per measurement
+      }
+      
+      // 📊 UPDATE TIMING METRICS
+      this.behavioralData.timingMetrics.currentIdleTime = timeSinceLastAction;
+      this.behavioralData.timingMetrics.totalIdleTime = this.behavioralData.idleTime;
+      this.behavioralData.timingMetrics.lastSaveTime = now;
+      
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
       this.lastSaveTime = Date.now();
       
@@ -757,13 +1189,20 @@ class GlobalBehavioralTracker {
         console.log('⏭️ Skipping regular backend transmission - baseline not completed yet');
         return;
       }
+
+      // 🔬 COSINE SIMILARITY: Create rolling windows for analysis
+      const rollingWindowData = this.createRollingWindows();
+      
+      // 🔧 Convert frontend data to backend format (Django model structure)
+      const convertedBehavioralData = this.convertToBackendFormat();
       
       // Send full behavioral payload for continuous monitoring (post-baseline)
-      console.log('📤 Sending continuous behavioral payload to backend...', {
+      console.log('📤 Sending cosine similarity behavioral payload to backend...', {
         sessionId: this.sessionId,
-        dataPoints: Object.keys(this.behavioralData).length,
-        actionCount: this.behavioralData.actionCount,
+        dataPoints: Object.keys(convertedBehavioralData).length,
+        actionCount: convertedBehavioralData.action_count,
         baselineCompleted: this.behavioralData.baselineCompleted,
+        rollingWindows: rollingWindowData.windows.length,
         isCollectingBaseline: this.behavioralData.isCollectingBaseline
       });
       
@@ -775,10 +1214,16 @@ class GlobalBehavioralTracker {
         body: JSON.stringify({
           session_id: this.sessionId,
           is_baseline: false, // This is continuous monitoring data
+          analysis_type: 'cosine_similarity', // 🎯 NEW: Specify analysis type
+          similarity_threshold: 0.75, // 🎯 75% threshold as requested
           behavioral_data: {
-            ...this.behavioralData,
+            // 🔧 USE CONVERTED DATA that matches Django model exactly
+            ...convertedBehavioralData,
             timestamp: Date.now(),
             currentPage: this.behavioralData.currentPage || 'unknown',
+            // 🔬 ROLLING WINDOW DATA for cosine similarity
+            rollingWindows: rollingWindowData.windows,
+            windowMetadata: rollingWindowData.metadata,
             // Reference baseline data if available
             baselineData: this.behavioralData.baselineBehaviorData,
             baselineMetrics: this.calculateBaselineMetrics()
@@ -788,24 +1233,29 @@ class GlobalBehavioralTracker {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 Continuous monitoring analysis result:', {
+        console.log('📊 Cosine similarity analysis result:', {
           status: result.user_auth_status,
           authorized: result.is_authorized,
+          cosineSimilarity: result.cosine_similarity,
+          windowSimilarities: result.window_similarities,
           riskScore: result.risk_score,
-          recommendation: result.recommendation
+          recommendation: result.recommendation,
+          analysisType: result.analysis_type
         });
         
         // Store analysis result
         this.behavioralData.lastAnalysisResult = result;
         this.behavioralData.lastAnalysisTime = Date.now();
         
-        // 🚨 Handle unauthorized users
-        if (!result.is_authorized && result.requires_authentication) {
-          console.warn('🚨 UNAUTHORIZED USER DETECTED!');
-          console.warn('⚠️ Authentication Required:', result.authentication_message);
+        // 🚨 Handle unauthorized users based on cosine similarity
+        if (!result.is_authorized) {
+          console.warn('🚨 UNAUTHORIZED USER DETECTED via Cosine Similarity!');
+          console.warn(`⚠️ Similarity Score: ${result.cosine_similarity || 'unknown'}`);
+          console.warn(`⚠️ Threshold: ${result.similarity_threshold || 0.75}`);
+          console.warn('⚠️ Recommendation:', result.recommendation);
           
           // Show authentication needed message
-          this.showAuthenticationMessage(result.authentication_message);
+          this.showAuthenticationMessage(result.recommendation || 'Behavioral patterns do not match authorized user');
           
           // Stop further behavioral tracking for unauthorized users
           this.handleUnauthorizedUser(result);
@@ -816,23 +1266,460 @@ class GlobalBehavioralTracker {
           detail: result
         }));
       } else {
-        console.warn('Backend analysis failed:', response.status, response.statusText);
+        console.warn('Backend cosine similarity analysis failed:', response.status, response.statusText);
       }
     } catch (error) {
-      console.warn('Could not send behavioral data to backend:', error.message);
+      console.warn('Could not send cosine similarity behavioral data to backend:', error.message);
     }
   }
   
+  // 🔧 Convert frontend camelCase data to Django snake_case format
+  convertToBackendFormat() {
+    try {
+      // Calculate derived metrics first
+      const totalTime = Date.now() - (this.behavioralData.trackingStartTime || Date.now());
+      const clickIntervals = this.calculateClickIntervals();
+      const suspiciousFeatureRatio = this.calculateSuspiciousFeatureRatio();
+      
+      // Map frontend data to Django model fields exactly
+      const backendData = {
+        // Core behavioral data
+        cursor_movements: this.behavioralData.cursorMovements || [],
+        key_press_times: this.behavioralData.keyPressTimes || [],
+        key_hold_times: this.behavioralData.keyHoldTimes || [],
+        click_timestamps: this.behavioralData.clickTimestamps || [],
+        click_intervals: clickIntervals,
+        cursor_speeds: this.behavioralData.cursorSpeeds || [],
+        cursor_acceleration: this.behavioralData.cursorAcceleration || [],
+        cursor_curvature: this.behavioralData.cursorCurvature || [],
+        
+        // Boolean and basic fields
+        paste_detected: this.behavioralData.pasteDetected || false,
+        total_time: Math.floor(totalTime),
+        classification: 'Unknown', // Will be determined by backend
+        human_score: 0.5, // Default neutral score
+        bot_score: 0.5, // Default neutral score
+        
+        // Indicator arrays
+        human_indicators: [], // Will be filled by backend analysis
+        bot_indicators: this.behavioralData.suspiciousPatterns || [],
+        
+        // Fingerprinting and detection scores
+        bot_fingerprint_score: this.behavioralData.botFingerprintScore || 0,
+        suspicious_flag: false, // Will be determined by backend
+        suspicious_feature_ratio: suspiciousFeatureRatio,
+        
+        // Enhanced metrics - debug data
+        mouse_movement_debug: {
+          trajectory: this.behavioralData.mouseTrajectory || [],
+          jitter: this.behavioralData.mouseJitter || [],
+          microJitter: this.behavioralData.cursorMicroJitter || 0,
+          pathEntropy: this.behavioralData.pathEntropy || 0,
+          accelerationVariance: this.behavioralData.accelerationVariance || 0
+        },
+        
+        speed_calculation_debug: {
+          allSpeeds: this.behavioralData.allSpeeds || [],
+          latestSpeed: this.behavioralData.latestSpeed || 0,
+          averageSpeed: this.calculateAverageSpeed(),
+          speedVariance: this.calculateSpeedVariance()
+        },
+        
+        post_paste_activity: this.behavioralData.postPasteActivity || {},
+        keyboard_patterns: this.behavioralData.keyboardPatterns || [],
+        suspicious_patterns: this.behavioralData.suspiciousPatterns || [],
+        
+        // Counters and metrics
+        action_count: this.behavioralData.actionCount || 0,
+        is_automated_browser: this.behavioralData.isAutomatedBrowser || false,
+        cursor_entropy: this.behavioralData.cursorEntropy || 0,
+        scroll_speeds: this.behavioralData.scrollSpeeds || [],
+        scroll_changes: this.behavioralData.scrollChanges || 0,
+        idle_time: this.behavioralData.idleTime || 0,
+        
+        // Additional detection fields
+        honeypot_value: null, // Would be set if honeypot is triggered
+        TabKeyCount: this.behavioralData.TabKeyCount || 0,
+        cursorAngleVariance: this.calculateCursorAngleVariance(),
+        mouseJitter: this.behavioralData.mouseJitter || [],
+        micropause: this.behavioralData.microPauses || [],
+        hesitation: this.behavioralData.hesitationTimes || [],
+        
+        // Device and fingerprinting
+        devicefingerprint: String(this.behavioralData.deviceFingerprint || '0'),
+        missing_canvas_fingerprint: this.behavioralData.missingCanvasFingerprint || false,
+        canvas_metrics: this.behavioralData.canvasMetrics || {},
+        unsualscreenresolution: this.behavioralData.unusualScreenResolution || {},
+        gpu_info: this.behavioralData.gpuInfo || {},
+        timing_metrics: this.behavioralData.timingMetrics || {},
+        evasion_signals: this.behavioralData.evasionSignals || {}
+      };
+
+      console.log('🔧 Converted frontend data to backend format:', {
+        totalFields: Object.keys(backendData).length,
+        cursorMovements: backendData.cursor_movements.length,
+        keyPresses: backendData.key_press_times.length,
+        clicks: backendData.click_timestamps.length,
+        actionCount: backendData.action_count
+      });
+
+      return backendData;
+      
+    } catch (error) {
+      console.error('❌ Error converting to backend format:', error);
+      return {};
+    }
+  }
+
+  // Helper functions for calculated fields
+  calculateClickIntervals() {
+    const clickTimes = this.behavioralData.clickTimestamps || [];
+    if (clickTimes.length < 2) return [];
+    
+    const intervals = [];
+    for (let i = 1; i < clickTimes.length; i++) {
+      intervals.push(clickTimes[i] - clickTimes[i-1]);
+    }
+    return intervals;
+  }
+
+  calculateSuspiciousFeatureRatio() {
+    const totalFeatures = 10; // Total number of features we check
+    const suspiciousCount = (this.behavioralData.suspiciousPatterns || []).length;
+    return totalFeatures > 0 ? suspiciousCount / totalFeatures : 0;
+  }
+
+  calculateAverageSpeed() {
+    const speeds = this.behavioralData.allSpeeds || [];
+    return speeds.length > 0 ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0;
+  }
+
+  calculateSpeedVariance() {
+    const speeds = this.behavioralData.allSpeeds || [];
+    if (speeds.length < 2) return 0;
+    
+    const mean = this.calculateAverageSpeed();
+    const variance = speeds.reduce((sum, speed) => sum + Math.pow(speed - mean, 2), 0) / speeds.length;
+    return variance;
+  }
+
+  calculateCursorAngleVariance() {
+    const angles = this.behavioralData.cursorAngles || [];
+    if (angles.length < 2) return 0;
+    
+    const mean = angles.reduce((sum, angle) => sum + angle, 0) / angles.length;
+    const variance = angles.reduce((sum, angle) => sum + Math.pow(angle - mean, 2), 0) / angles.length;
+    return variance;
+  }
+
   setupUnloadHandler() {
     const handleUnload = () => {
       // Final save before page unload
       this.updateCrossPageMetrics();
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
-      console.log('💾 Final behavioral data save on unload');
+      this.saveToLocalStorage();
     };
-    
+
     window.addEventListener('beforeunload', handleUnload);
     window.addEventListener('pagehide', handleUnload);
+  }
+
+  // 🔬 COSINE SIMILARITY: Create rolling windows for behavioral analysis
+  createRollingWindows(windowSize = 10, stepSize = 5) {
+    try {
+      console.log('🔬 Creating rolling windows for cosine similarity analysis...');
+      
+      const windows = [];
+      const metadata = {
+        windowSize,
+        stepSize,
+        totalDataPoints: 0,
+        windowsCreated: 0,
+        timestamp: Date.now()
+      };
+
+      // Helper function to create windows from array data
+      const createWindowsFromArray = (dataArray, windowSize, stepSize) => {
+        if (!dataArray || dataArray.length < windowSize) {
+          return dataArray ? [dataArray] : []; // Return single window if data is smaller
+        }
+
+        const windows = [];
+        for (let i = 0; i <= dataArray.length - windowSize; i += stepSize) {
+          const window = dataArray.slice(i, i + windowSize);
+          windows.push(window);
+        }
+        return windows;
+      };
+
+      // 📊 CURSOR MOVEMENT WINDOWS
+      if (this.behavioralData.cursorMovements && this.behavioralData.cursorMovements.length > 0) {
+        const cursorWindows = createWindowsFromArray(
+          this.behavioralData.cursorMovements, 
+          windowSize, 
+          stepSize
+        );
+        
+        cursorWindows.forEach((window, index) => {
+          windows.push({
+            type: 'cursor_movement',
+            windowIndex: index,
+            data: window,
+            features: this.extractCursorFeatures(window),
+            timestamp: Date.now()
+          });
+        });
+        
+        metadata.totalDataPoints += this.behavioralData.cursorMovements.length;
+        console.log(`📊 Created ${cursorWindows.length} cursor movement windows`);
+      }
+
+      // ⌨️ KEYSTROKE TIMING WINDOWS
+      if (this.behavioralData.keyPressTimes && this.behavioralData.keyPressTimes.length > 0) {
+        const keystrokeWindows = createWindowsFromArray(
+          this.behavioralData.keyPressTimes, 
+          Math.min(windowSize, this.behavioralData.keyPressTimes.length), 
+          stepSize
+        );
+        
+        keystrokeWindows.forEach((window, index) => {
+          windows.push({
+            type: 'keystroke_timing',
+            windowIndex: index,
+            data: window,
+            features: this.extractKeystrokeFeatures(window),
+            timestamp: Date.now()
+          });
+        });
+        
+        metadata.totalDataPoints += this.behavioralData.keyPressTimes.length;
+        console.log(`⌨️ Created ${keystrokeWindows.length} keystroke timing windows`);
+      }
+
+      // 🖱️ CLICK PATTERN WINDOWS
+      if (this.behavioralData.clickTimestamps && this.behavioralData.clickTimestamps.length > 0) {
+        const clickWindows = createWindowsFromArray(
+          this.behavioralData.clickTimestamps, 
+          Math.min(windowSize, this.behavioralData.clickTimestamps.length), 
+          stepSize
+        );
+        
+        clickWindows.forEach((window, index) => {
+          windows.push({
+            type: 'click_pattern',
+            windowIndex: index,
+            data: window,
+            features: this.extractClickFeatures(window),
+            timestamp: Date.now()
+          });
+        });
+        
+        metadata.totalDataPoints += this.behavioralData.clickTimestamps.length;
+        console.log(`🖱️ Created ${clickWindows.length} click pattern windows`);
+      }
+
+      // 📏 SCROLL BEHAVIOR WINDOWS
+      if (this.behavioralData.scrollSpeeds && this.behavioralData.scrollSpeeds.length > 0) {
+        const scrollWindows = createWindowsFromArray(
+          this.behavioralData.scrollSpeeds, 
+          Math.min(windowSize, this.behavioralData.scrollSpeeds.length), 
+          stepSize
+        );
+        
+        scrollWindows.forEach((window, index) => {
+          windows.push({
+            type: 'scroll_behavior',
+            windowIndex: index,
+            data: window,
+            features: this.extractScrollFeatures(window),
+            timestamp: Date.now()
+          });
+        });
+        
+        metadata.totalDataPoints += this.behavioralData.scrollSpeeds.length;
+        console.log(`📏 Created ${scrollWindows.length} scroll behavior windows`);
+      }
+
+      metadata.windowsCreated = windows.length;
+
+      console.log('✅ Rolling windows created successfully:', {
+        totalWindows: windows.length,
+        totalDataPoints: metadata.totalDataPoints,
+        windowSize,
+        stepSize
+      });
+
+      return {
+        windows,
+        metadata
+      };
+
+    } catch (error) {
+      console.error('❌ Error creating rolling windows:', error);
+      return {
+        windows: [],
+        metadata: {
+          error: error.message,
+          timestamp: Date.now()
+        }
+      };
+    }
+  }
+
+  // 🔬 Extract features from cursor movement windows
+  extractCursorFeatures(cursorWindow) {
+    try {
+      if (!cursorWindow || cursorWindow.length < 2) return [];
+
+      const features = [];
+      const speeds = [];
+      const angles = [];
+      const accelerations = [];
+
+      for (let i = 1; i < cursorWindow.length; i++) {
+        const prev = cursorWindow[i - 1];
+        const curr = cursorWindow[i];
+
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        const dt = (curr.timestamp - prev.timestamp) / 1000.0;
+
+        if (dt > 0) {
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const speed = distance / dt;
+          speeds.push(speed);
+
+          const angle = Math.atan2(dy, dx);
+          angles.push(angle);
+
+          if (i > 1 && speeds.length > 1) {
+            const acceleration = speeds[speeds.length - 1] - speeds[speeds.length - 2];
+            accelerations.push(acceleration);
+          }
+        }
+      }
+
+      // Statistical features
+      if (speeds.length > 0) {
+        features.push(
+          this.calculateMean(speeds),
+          this.calculateMedian(speeds),
+          Math.max(...speeds),
+          Math.min(...speeds),
+          this.calculateStandardDeviation(speeds)
+        );
+      }
+
+      if (angles.length > 0) {
+        features.push(
+          this.calculateMean(angles),
+          this.calculateStandardDeviation(angles)
+        );
+      }
+
+      if (accelerations.length > 0) {
+        features.push(
+          this.calculateMean(accelerations),
+          this.calculateStandardDeviation(accelerations)
+        );
+      }
+
+      return features;
+    } catch (error) {
+      console.error('Error extracting cursor features:', error);
+      return [];
+    }
+  }
+
+  // ⌨️ Extract features from keystroke timing windows
+  extractKeystrokeFeatures(keystrokeWindow) {
+    try {
+      if (!keystrokeWindow || keystrokeWindow.length < 2) return [];
+
+      const intervals = [];
+      for (let i = 1; i < keystrokeWindow.length; i++) {
+        intervals.push(keystrokeWindow[i] - keystrokeWindow[i - 1]);
+      }
+
+      if (intervals.length === 0) return [];
+
+      return [
+        this.calculateMean(intervals),
+        this.calculateMedian(intervals),
+        Math.max(...intervals),
+        Math.min(...intervals),
+        this.calculateStandardDeviation(intervals)
+      ];
+    } catch (error) {
+      console.error('Error extracting keystroke features:', error);
+      return [];
+    }
+  }
+
+  // 🖱️ Extract features from click pattern windows
+  extractClickFeatures(clickWindow) {
+    try {
+      if (!clickWindow || clickWindow.length < 2) return [clickWindow ? clickWindow.length : 0];
+
+      const intervals = [];
+      for (let i = 1; i < clickWindow.length; i++) {
+        intervals.push(clickWindow[i] - clickWindow[i - 1]);
+      }
+
+      return [
+        this.calculateMean(intervals),
+        this.calculateStandardDeviation(intervals),
+        clickWindow.length // Click frequency
+      ];
+    } catch (error) {
+      console.error('Error extracting click features:', error);
+      return [0];
+    }
+  }
+
+  // 📏 Extract features from scroll behavior windows
+  extractScrollFeatures(scrollWindow) {
+    try {
+      if (!scrollWindow || scrollWindow.length === 0) return [];
+
+      return [
+        this.calculateMean(scrollWindow),
+        this.calculateMedian(scrollWindow),
+        Math.max(...scrollWindow),
+        Math.min(...scrollWindow),
+        this.calculateStandardDeviation(scrollWindow)
+      ];
+    } catch (error) {
+      console.error('Error extracting scroll features:', error);
+      return [];
+    }
+  }
+
+  // 📊 Statistical helper functions
+  calculateMean(values) {
+    return values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+  }
+
+  calculateMedian(values) {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  }
+
+  calculateStandardDeviation(values) {
+    if (values.length <= 1) return 0;
+    const mean = this.calculateMean(values);
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (values.length - 1);
+    return Math.sqrt(variance);
+  }
+
+  saveToLocalStorage() {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
+      console.log('💾 Final behavioral data save on unload');
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
   }
   
   getBehavioralData() {
@@ -929,8 +1816,6 @@ class GlobalBehavioralTracker {
   completeBaselineCollection() {
     if (!this.behavioralData.isCollectingBaseline) return;
     
-    console.log('✅ Baseline collection completed (20 seconds)');
-    
     this.behavioralData.isCollectingBaseline = false;
     this.behavioralData.baselineCompleted = true;
     this.behavioralData.baselineBehaviorData.collectionEndTime = Date.now();
@@ -940,8 +1825,6 @@ class GlobalBehavioralTracker {
     
     // Send baseline data to backend first
     this.sendBaselineToBackend().then(() => {
-      console.log('📤 Baseline data sent to backend, starting continuous transmission...');
-      
       // Start continuous data transmission to backend immediately after baseline is sent
       this.startContinuousTransmission();
       
@@ -953,8 +1836,6 @@ class GlobalBehavioralTracker {
         }
       }));
     }).catch((error) => {
-      console.error('❌ Failed to send baseline data, but starting continuous transmission anyway:', error);
-      
       // Start continuous transmission even if baseline sending failed
       this.startContinuousTransmission();
       
@@ -970,19 +1851,17 @@ class GlobalBehavioralTracker {
   
   // 🎯 GLOBAL BACKGROUND Baseline Collection - Eagle's Eye View
   startBackgroundBaselineCollection() {
-    // Only start if not already collecting baseline and not already completed
-    if (this.behavioralData.isCollectingBaseline || this.behavioralData.baselineCompleted) {
-      console.log('⏭️ Baseline already collecting or completed, skipping background start');
-      return;
-    }
+    // 🔄 FORCE FRESH START: Always reset baseline state for new page loads
+    this.behavioralData.isCollectingBaseline = false;
+    this.behavioralData.baselineCompleted = false;
+    this.behavioralData.baselineCollectionStartTime = null;
+    this.behavioralData.baselineBehaviorData = null;
     
     // 🛡️ PROTECTION: Clear any existing baseline timer
     if (this.baselineTimerId) {
       clearTimeout(this.baselineTimerId);
       this.baselineTimerId = null;
     }
-    
-    console.log('🦅 Starting GLOBAL baseline collection for 20 seconds...');
     
     // 📊 CRITICAL: Set collection state BEFORE initializing data
     this.behavioralData.isCollectingBaseline = true;
@@ -1029,13 +1908,11 @@ class GlobalBehavioralTracker {
       overallBehaviorProfile: null
     };
     
-    // Set baseline as HIGH PRIORITY background task
-    console.log('🔕 SILENT baseline collection - NO UI interruption, EAGLE\'S EYE monitoring');
-    console.log('� Collecting baseline across ALL pages for 20 seconds...');
+    // Set baseline as HIGH PRIORITY background task - SILENT OPERATION
+    // Collecting baseline across ALL pages for 20 seconds silently
     
     // Set 20-second timer for baseline completion
     this.baselineTimerId = setTimeout(() => {
-      console.log('⏰ Baseline timer completed - finishing collection...');
       this.completeBackgroundBaselineCollection();
     }, this.behavioralData.baselineCollectionDuration);
     
@@ -1045,18 +1922,13 @@ class GlobalBehavioralTracker {
     // Save session state
     this.saveSession();
     
-    console.log('✅ Baseline collection started - Timer ID:', this.baselineTimerId);
-    
     return this.behavioralData.baselineCollectionDuration;
   }
   
   completeBackgroundBaselineCollection() {
     if (!this.behavioralData.isCollectingBaseline) {
-      console.log('⚠️ Baseline was not collecting, cannot complete background collection');
       return;
     }
-    
-    console.log('🦅 Baseline collection completed after 20 seconds');
     
     // Clean up baseline timer
     if (this.baselineTimerId) {
@@ -1069,35 +1941,14 @@ class GlobalBehavioralTracker {
     this.behavioralData.baselineCompleted = true;
     this.behavioralData.baselineBehaviorData.collectionEndTime = Date.now();
     
-    // Validate and log baseline data quality
+    // Validate baseline data quality silently
     const baselineStats = this.validateBaselineData();
-    console.log('📊 Baseline Data Quality:', {
-      duration: (this.behavioralData.baselineBehaviorData.collectionEndTime - this.behavioralData.baselineBehaviorData.collectionStartTime) / 1000 + 's',
-      mouseMovements: baselineStats.mouseMovements,
-      keyPresses: baselineStats.keyPresses,
-      clicks: baselineStats.clicks,
-      totalActions: baselineStats.totalActions,
-      isValid: baselineStats.isValid
-    });
-    
-    if (!baselineStats.isValid) {
-      console.warn('⚠️ WARNING: Baseline data quality is insufficient but proceeding with transmission');
-    }
     
     // Calculate comprehensive baseline profile
     this.behavioralData.baselineBehaviorData.overallBehaviorProfile = this.generateComprehensiveBaselineProfile();
     
-    console.log('📤 Sending baseline data to backend...');
-    
-    // Send baseline data to backend first
+    // Send baseline data to backend silently
     this.sendBaselineToBackend().then((result) => {
-      console.log('✅ Baseline data successfully transmitted to backend');
-      console.log('✅ Backend Response:', {
-        baseline_id: result.baseline_id,
-        user_id: result.user_id,
-        quality_score: result.data_quality_score
-      });
-      
       // Start continuous data transmission
       this.startContinuousTransmission();
       
@@ -1111,8 +1962,6 @@ class GlobalBehavioralTracker {
         }
       }));
     }).catch((error) => {
-      console.error('❌ Baseline data transmission failed:', error);
-      
       // Start continuous transmission anyway
       this.startContinuousTransmission();
       
@@ -1308,18 +2157,14 @@ class GlobalBehavioralTracker {
   // 📤 Send baseline data to backend
   async sendBaselineToBackend() {
     if (!this.behavioralData.baselineBehaviorData) {
-      console.warn('⚠️ No baseline data to send');
       return;
     }
     
     try {
-      console.log('📤 Sending baseline data to backend...');
-      
       const baselineMetrics = this.calculateBaselineMetrics();
       
       const payload = {
         session_id: this.sessionId,
-        is_baseline: true,
         baseline_data: {
           ...this.behavioralData.baselineBehaviorData,
           metrics: baselineMetrics,
@@ -1329,7 +2174,7 @@ class GlobalBehavioralTracker {
         }
       };
       
-      const response = await fetch('http://127.0.0.1:8000/user/behavioral-analysis/', {
+      const response = await fetch('http://127.0.0.1:8000/user/baseline-storage/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1339,11 +2184,6 @@ class GlobalBehavioralTracker {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Baseline data sent successfully:', {
-          baseline_id: result.baseline_id,
-          user_id: result.user_id,
-          quality_score: result.data_quality_score
-        });
         
         // Store baseline analysis result
         this.behavioralData.baselineAnalysisResult = result;
@@ -1351,20 +2191,17 @@ class GlobalBehavioralTracker {
         
         return result;
       } else {
-        console.error('❌ Failed to send baseline data:', response.status, response.statusText);
-        
         // Try to get error response body
         try {
           const errorBody = await response.text();
-          console.error('❌ Error details:', errorBody);
         } catch (e) {
-          console.error('❌ Could not read error response');
+          // Silent error handling
         }
         
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('❌ Error sending baseline data:', error.message);
+      // Silent error handling
       throw error;
     }
   }
