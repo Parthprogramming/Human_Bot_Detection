@@ -362,14 +362,10 @@ class BehavioralAnalyzer:
         self.real_time_sessions = {}   # Track real-time behavioral data
         
     def calculate_behavioral_metrics(self, behavioral_data):
-        """
-        Calculate comprehensive advanced behavioral metrics from ALL behavioral fields sent from frontend
-        Enhanced to analyze cursor movements, keystrokes, clicks, jitter, hesitation, device info, and more
-        """
+  
         metrics = {}
         
         try:
-            print(f"🔬 Calculating comprehensive behavioral metrics from ALL frontend data...")
             
             # 🖱️ COMPREHENSIVE CURSOR MOVEMENT ANALYSIS
             cursor_movements = behavioral_data.get('cursor_movements', [])
@@ -598,11 +594,7 @@ class BehavioralAnalyzer:
             
             metrics['comprehensive_automation_risk'] = automation_indicators / 5.0
             
-            print(f"🎯 COMPREHENSIVE ANALYSIS COMPLETE:")
-            print(f"   - Total behavioral actions: {total_actions}")
-            print(f"   - Behavioral consistency: {metrics['overall_behavioral_consistency']:.3f}")
-            print(f"   - Automation risk: {metrics['comprehensive_automation_risk']:.3f}")
-            print(f"   - Total metrics computed: {len(metrics)}")
+
             
         except Exception as e:
             logger.error(f"Error calculating comprehensive behavioral metrics: {str(e)}")
@@ -694,23 +686,10 @@ class BehavioralAnalyzer:
     
     
     def analyze_with_baseline_comparison(self, session_id, current_data, baseline_behavior, baseline_metrics):
-        """
-        Enhanced analysis that compares current behavior with stored baseline using Mahalanobis distance
-        
-        📌 Mahalanobis Distance Benefits:
-        - Considers feature correlations (e.g., faster cursor → faster scrolling)
-        - Weights stable features higher than noisy features
-        - Better statistical anomaly detection for multivariate behavioral data
-        - Takes variance into account for each feature
-        """
+
         try:
-            print(f"🔬 Starting enhanced baseline comparison analysis for session: {session_id}")
             
-            # 🔍 DEBUG: Log data structures for troubleshooting
-            print(f"🔍 DEBUG: Current data keys: {list(current_data.keys())}")
-            print(f"🔍 DEBUG: Baseline behavior keys: {list(baseline_behavior.keys())}")
-            
-            # STEP 1: Traditional metrics comparison (for backward compatibility)
+
             current_metrics = self.calculate_behavioral_metrics(current_data)
             
             # 🔧 NORMALIZE BASELINE DATA STRUCTURE - Handle both formats  
@@ -736,13 +715,7 @@ class BehavioralAnalyzer:
                 baseline_behavior.get('actionCount', 0)
             )
             
-            print(f"🔍 DEBUG: Baseline data extracted:")
-            print(f"  - Cursor movements: {len(baseline_cursor_movements)}")
-            print(f"  - Key presses: {len(baseline_key_presses)}")
-            print(f"  - Clicks: {len(baseline_clicks)}")
-            print(f"  - Scroll events: {len(baseline_scroll_speeds)}")
-            print(f"  - Action count: {baseline_action_count}")
-            
+
             # Calculate baseline metrics for comparison using normalized structure
             normalized_baseline_data = {
                 'cursor_movements': baseline_cursor_movements,
@@ -753,33 +726,25 @@ class BehavioralAnalyzer:
             }
             
             baseline_computed_metrics = self.calculate_behavioral_metrics(normalized_baseline_data)
-            print(f"🔍 DEBUG: Baseline computed metrics: {len(baseline_computed_metrics)} metrics")
             
-            # STEP 2: Mahalanobis distance analysis for statistical anomaly detection
-            print(f"🔬 Performing Mahalanobis distance analysis...")
+            # STEP 2: Enhanced Mahalanobis distance analysis for better authorized user detection
             mahalanobis_analysis = self.compare_with_mahalanobis_distance(
                 current_data, 
                 baseline_behavior,  # Pass original baseline for feature extraction
-                distance_threshold=3.0  # 3 standard deviations threshold for anomaly detection
+                distance_threshold=4.5  # 🆕 Increased from 3.0 to 4.5 for better authorized user detection
             )
             
-            print(f"🔍 DEBUG: Mahalanobis distance: {mahalanobis_analysis.get('mahalanobis_distance', float('inf')):.4f}")
-            print(f"🔍 DEBUG: Similarity score: {mahalanobis_analysis.get('similarity_score', 0):.3f}")
-            
-            # STEP 3: Combine both analysis methods for robust decision making
-            
+  
             # Traditional baseline comparison
             baseline_deviations = []
             similarity_scores = []
             
-            DEVIATION_THRESHOLD = 2.0   # Max 2 standard deviations
+            DEVIATION_THRESHOLD = 2.5   # 🆕 Increased from 2.0 to 2.5 for more tolerance
             
-            print(f"🔬 Comparing traditional metrics...")
             for metric_name in ['avg_speed', 'speed_variance', 'avg_keystroke_interval', 'keystroke_variance', 'avg_click_interval']:
                 current_value = current_metrics.get(metric_name, 0)
                 baseline_value = baseline_computed_metrics.get(metric_name, 0)
                 
-                print(f"🔍 DEBUG: {metric_name} - Current: {current_value:.3f}, Baseline: {baseline_value:.3f}")
                 
                 if baseline_value > 0:
                     # Calculate percentage difference
@@ -796,11 +761,11 @@ class BehavioralAnalyzer:
                             'deviation_ratio': difference,
                             'severity': 'HIGH' if difference > 3.0 else 'MEDIUM'
                         })
-                        print(f"⚠️ DEBUG: Deviation detected in {metric_name}: {difference:.3f}")
+                        
             
             # Calculate traditional baseline similarity
             traditional_similarity = statistics.mean(similarity_scores) if similarity_scores else 0.0
-            print(f"🔍 DEBUG: Traditional similarity: {traditional_similarity:.3f}")
+            
             
             # STEP 4: Weight Mahalanobis distance analysis more heavily as it's more sophisticated
             # Convert distance to similarity score for combination with traditional metrics
@@ -815,9 +780,17 @@ class BehavioralAnalyzer:
             
             # Override with traditional method if Mahalanobis result is borderline
             mahal_distance = mahalanobis_analysis.get('mahalanobis_distance', float('inf'))
-            if 2.0 <= mahal_distance <= 3.5:
-                # In borderline cases, also consider traditional metrics
-                is_authorized = is_authorized and (traditional_similarity >= 0.6)
+            adaptive_threshold = mahalanobis_analysis.get('adaptive_threshold', 4.5)
+            
+            # 🆕 MORE LENIENT BORDERLINE HANDLING
+            if adaptive_threshold <= mahal_distance <= (adaptive_threshold * 1.5):
+                # In borderline cases, also consider traditional metrics with more lenient threshold
+                is_authorized = is_authorized and (traditional_similarity >= 0.5)  # Reduced from 0.6 to 0.5
+                print(f"🔧 Borderline case: Mahal={mahal_distance:.2f}, Traditional={traditional_similarity:.2f}")
+            elif mahal_distance <= adaptive_threshold * 2.0:
+                # For moderate deviations, be more forgiving
+                is_authorized = is_authorized or (traditional_similarity >= 0.7)  # Allow override if traditional is good
+                print(f"🔧 Moderate deviation: Using traditional metrics as backup")
             
             # Calculate combined confidence
             confidence = (
@@ -835,25 +808,27 @@ class BehavioralAnalyzer:
             
             # Generate comprehensive recommendations
             if not is_authorized:
-                if mahal_distance >= 6.0:
-                    recommendation = 'BLOCK: Extreme behavioral anomaly detected (Mahalanobis distance >= 6.0)'
-                elif mahal_distance >= 4.0:
+                if mahal_distance >= adaptive_threshold * 2.5:  # Very high threshold for blocking
+                    recommendation = 'BLOCK: Extreme behavioral anomaly detected (Mahalanobis distance >= 11.25)'
+                elif mahal_distance >= adaptive_threshold * 1.8:
                     recommendation = 'CHALLENGE: High behavioral anomaly - additional verification required'
                 else:
                     recommendation = 'MONITOR: Moderate anomaly with traditional metric deviations'
             else:
-                if mahal_distance <= 1.0:
+                if mahal_distance <= adaptive_threshold * 0.5:
                     recommendation = 'ALLOW: Excellent behavioral match (very low statistical deviation)'
-                elif mahal_distance <= 2.0:
-                    recommendation = 'ALLOW: Good behavioral match with high confidence'
+                elif mahal_distance <= adaptive_threshold:
+                    recommendation = 'ALLOW: Good behavioral match with high confidence (within adaptive threshold)'
+                elif mahal_distance <= adaptive_threshold * 1.3:
+                    recommendation = 'ALLOW: Acceptable behavioral match (enhanced tolerance applied)'
                 else:
-                    recommendation = 'ALLOW: Acceptable behavioral match (monitor for patterns)'
+                    recommendation = 'ALLOW: Extended tolerance match (legitimate user with variation)'
             
-            # Combine suspicious indicators from both methods
+            # Combine suspicious indicators from both methods (more lenient thresholds)
             suspicious_indicators = mahalanobis_analysis.get('anomaly_indicators', [])
-            if traditional_similarity < 0.5:
+            if traditional_similarity < 0.4:  # Reduced from 0.5 to 0.4
                 suspicious_indicators.append('Low traditional metrics similarity')
-            if len(baseline_deviations) > 2:
+            if len(baseline_deviations) > 3:  # Increased from 2 to 3
                 suspicious_indicators.append('Multiple traditional metric deviations')
             
 
@@ -865,6 +840,9 @@ class BehavioralAnalyzer:
                 
                 # Mahalanobis distance results (primary)
                 'mahalanobis_distance': mahalanobis_analysis.get('mahalanobis_distance', float('inf')),
+                'adaptive_threshold': mahalanobis_analysis.get('adaptive_threshold', 4.5),
+                'original_threshold': mahalanobis_analysis.get('original_threshold', 4.5),
+                'authorization_reason': mahalanobis_analysis.get('authorization_reason', 'Unknown'),
                 'mahalanobis_similarity': mahal_similarity,
                 'normalized_distance': mahalanobis_analysis.get('normalized_distance', 1.0),
                 'statistical_significance': mahalanobis_analysis.get('statistical_significance', 'HIGH'),
@@ -881,8 +859,8 @@ class BehavioralAnalyzer:
                 'risk_factors': [{'metric': 'enhanced_mahalanobis_analysis', 'severity': 'HIGH' if not is_authorized else 'LOW'}],
                 'suspicious_indicators': suspicious_indicators,
                 'recommendation': recommendation,
-                'analysis_type': 'enhanced_mahalanobis_distance',
-                'distance_threshold': 3.0,
+                'analysis_type': 'enhanced_mahalanobis_distance_v2',
+                'distance_threshold': 4.5,
                 'profile_size': len(baseline_computed_metrics)
             }
             
@@ -1006,17 +984,41 @@ class BehavioralAnalyzer:
                     if features:
                         baseline_feature_vectors.append(features)
             else:
-                # Single baseline sample - we'll need to simulate distribution
+                # Single baseline sample - enhanced handling for better distribution modeling
                 baseline_features = self.extract_behavioral_features(baseline_data)
                 if baseline_features:
-                    # Create variations around the baseline to build covariance matrix
+                    # Add the original baseline
                     baseline_feature_vectors.append(baseline_features)
                     
-                    # Add small random variations to create a distribution
-                    # This simulates natural behavioral variation
-                    for _ in range(10):  # Create 10 variations
-                        variation = np.array(baseline_features) * (1 + np.random.normal(0, 0.05, len(baseline_features)))
-                        baseline_feature_vectors.append(variation.tolist())
+                    # 🆕 IMPROVED VARIATION GENERATION
+                    # Create more realistic variations based on typical human behavioral variance
+                    base_array = np.array(baseline_features)
+                    
+                    # Different types of realistic variations
+                    variation_types = [
+                        (0.02, 5),   # Very small variations (5 samples)
+                        (0.05, 3),   # Small variations (3 samples) 
+                        (0.08, 2),   # Medium variations (2 samples)
+                    ]
+                    
+                    for std_factor, count in variation_types:
+                        for _ in range(count):
+                            # Use different noise patterns for different feature types
+                            noise = np.random.normal(0, std_factor, len(baseline_features))
+                            
+                            # Apply selective noise based on feature indices
+                            for i in range(len(noise)):
+                                if i < 20:  # Cursor/mouse features - moderate variation
+                                    noise[i] *= 0.8
+                                elif i < 40:  # Keystroke features - low variation  
+                                    noise[i] *= 0.5
+                                else:  # Other features - higher variation allowed
+                                    noise[i] *= 1.2
+                            
+                            variation = base_array * (1 + noise)
+                            # Ensure no negative values for features that shouldn't be negative
+                            variation = np.maximum(variation, base_array * 0.1)
+                            baseline_feature_vectors.append(variation.tolist())
             
             if len(baseline_feature_vectors) < 2:
                 print("⚠️ Insufficient baseline data for Mahalanobis distance calculation")
@@ -1038,38 +1040,67 @@ class BehavioralAnalyzer:
             baseline_mean = np.mean(baseline_matrix, axis=0)
             baseline_cov = np.cov(baseline_matrix, rowvar=False)
             
-            # Add small regularization to diagonal to ensure matrix is invertible
-            regularization = 1e-6
+            # 🆕 ENHANCED REGULARIZATION STRATEGY
+            # Adaptive regularization based on matrix condition
+            condition_number = np.linalg.cond(baseline_cov)
+            
+            if condition_number > 1e12:  # Very ill-conditioned
+                regularization = 1e-3
+                print(f"⚠️ High condition number ({condition_number:.2e}), using strong regularization")
+            elif condition_number > 1e8:  # Moderately ill-conditioned  
+                regularization = 1e-4
+                print(f"⚠️ Moderate condition number ({condition_number:.2e}), using medium regularization")
+            else:
+                regularization = 1e-6
+                print(f"✅ Good condition number ({condition_number:.2e}), using light regularization")
+            
             baseline_cov += np.eye(baseline_cov.shape[0]) * regularization
             
-            # Calculate Mahalanobis distance
+            # 🆕 ENHANCED DISTANCE CALCULATION WITH FALLBACKS
             try:
-                # Use scipy's mahalanobis distance function
+                # Method 1: Standard scipy mahalanobis
                 inv_cov = linalg.inv(baseline_cov)
                 mahal_distance = mahalanobis(current_vec, baseline_mean, inv_cov)
                 
-                print(f"🔍 DEBUG: Mahalanobis distance calculated: {mahal_distance:.4f}")
+                
+                # Sanity check for unrealistic distances
+                if mahal_distance > 100:  # Extremely high distance suggests calculation error
+                    print(f"⚠️ Unrealistic distance detected ({mahal_distance:.4f}), using fallback")
+                    raise ValueError("Distance too high")
+                    
                 return float(mahal_distance)
                 
-            except (linalg.LinAlgError, np.linalg.LinAlgError):
-                # Fallback to pseudo-inverse if matrix is singular
-                print("⚠️ Using pseudo-inverse for singular covariance matrix")
+            except (linalg.LinAlgError, np.linalg.LinAlgError, ValueError):
+                # Method 2: Pseudo-inverse approach
+                print("⚠️ Using pseudo-inverse for problematic covariance matrix")
                 try:
                     pseudo_inv_cov = linalg.pinv(baseline_cov)
                     diff = current_vec - baseline_mean
                     mahal_distance = np.sqrt(np.dot(np.dot(diff, pseudo_inv_cov), diff))
                     
-                    print(f"🔍 DEBUG: Mahalanobis distance (pseudo-inverse): {mahal_distance:.4f}")
+                    
+                    # Scale down if unrealistic
+                    if mahal_distance > 50:
+                        mahal_distance = min(mahal_distance, 10.0)  # Cap at reasonable value
+                        print(f"🔧 Capped distance at: {mahal_distance:.4f}")
+                    
                     return float(mahal_distance)
                     
                 except Exception as e:
-                    print(f"⚠️ Error with pseudo-inverse: {e}")
-                    # Final fallback to Euclidean distance normalized by std
-                    std_devs = np.std(baseline_matrix, axis=0)
-                    std_devs[std_devs == 0] = 1  # Avoid division by zero
-                    euclidean_normalized = np.sqrt(np.sum(((current_vec - baseline_mean) / std_devs) ** 2))
+                    # Method 3: Enhanced normalized Euclidean distance
+                    print(f"⚠️ Pseudo-inverse failed ({e}), using enhanced Euclidean fallback")
                     
-                    print(f"🔍 DEBUG: Fallback normalized Euclidean distance: {euclidean_normalized:.4f}")
+                    std_devs = np.std(baseline_matrix, axis=0)
+                    std_devs[std_devs == 0] = np.mean(std_devs[std_devs > 0]) if np.any(std_devs > 0) else 1.0
+                    
+                    # Use median absolute deviation for more robust scaling
+                    mad = np.median(np.abs(baseline_matrix - baseline_mean), axis=0)
+                    mad[mad == 0] = np.median(mad[mad > 0]) if np.any(mad > 0) else 1.0
+                    
+                    # Combine std and MAD for robust distance
+                    scaling_factors = np.minimum(std_devs, mad * 1.4826)  # 1.4826 is MAD scaling factor
+                    euclidean_normalized = np.sqrt(np.sum(((current_vec - baseline_mean) / scaling_factors) ** 2))
+                    
                     return float(euclidean_normalized)
             
         except Exception as e:
@@ -1078,11 +1109,7 @@ class BehavioralAnalyzer:
             return float('inf')  # High distance indicates anomaly
     
     def extract_behavioral_features(self, behavioral_data):
-        """
-        Extract comprehensive numerical feature vectors from ALL behavioral data for cosine similarity analysis
-        Enhanced to handle both frontend (camelCase) and backend (snake_case) formats
-        Creates a comprehensive feature vector from ALL behavioral metrics for accurate similarity comparison
-        """
+
         try:
             features = []
             
@@ -1100,7 +1127,6 @@ class BehavioralAnalyzer:
             cursor_acceleration = behavioral_data.get('cursor_acceleration', [])
             cursor_curvature = behavioral_data.get('cursor_curvature', [])
             
-            print(f"🔍 DEBUG: Cursor movements found: {len(cursor_movements)} points")
             
             # Cursor movement statistical features
             if cursor_movements:
@@ -1147,7 +1173,6 @@ class BehavioralAnalyzer:
                 print(f"✅ Cursor features: {len(speeds)} movements processed")
             else:
                 features.extend([0] * 12)  # 12 zeros for missing cursor data
-                print("🔍 DEBUG: No cursor movement data found")
             
             # ⌨️ COMPREHENSIVE KEYSTROKE FEATURES
             key_press_times = (
@@ -1159,7 +1184,6 @@ class BehavioralAnalyzer:
                 behavioral_data.get('keyHoldTimes', [])
             )
             
-            print(f"🔍 DEBUG: Key press times found: {len(key_press_times)} keystrokes")
             
             if key_press_times and len(key_press_times) > 1:
                 intervals = [key_press_times[i] - key_press_times[i-1] for i in range(1, len(key_press_times))]
@@ -1193,7 +1217,6 @@ class BehavioralAnalyzer:
             )
             click_intervals = behavioral_data.get('click_intervals', [])
             
-            print(f"🔍 DEBUG: Click timestamps found: {len(click_timestamps)} clicks")
             
             if click_timestamps and len(click_timestamps) > 1:
                 if not click_intervals:
@@ -1356,26 +1379,10 @@ class BehavioralAnalyzer:
             logger.error(f"Error creating rolling windows: {str(e)}")
             return [data]
     
-    def compare_with_mahalanobis_distance(self, current_data, baseline_behavior, distance_threshold=3.0):
-        """
-        Compare current behavioral data with baseline using Mahalanobis distance
-        
-        📌 Mahalanobis Distance Benefits:
-        - Considers feature correlations (e.g., faster cursor → faster scrolling)
-        - Weights stable features higher than noisy features  
-        - Better statistical anomaly detection for multivariate behavioral data
-        - Takes variance into account for each feature
-        
-        Args:
-            current_data: Current behavioral data
-            baseline_behavior: Stored baseline behavioral data
-            distance_threshold: Threshold for authorized vs suspicious (default: 3.0 standard deviations)
-            
-        Returns:
-            Dict with distance scores and authorization decision
-        """
+    def compare_with_mahalanobis_distance(self, current_data, baseline_behavior, distance_threshold=4.5):
+
         try:
-            print(f"🔬 Starting Mahalanobis distance analysis with threshold: {distance_threshold}")
+            print(f"🔬 Starting Enhanced Mahalanobis distance analysis with threshold: {distance_threshold}")
             
             # Extract feature vectors from both datasets
             current_features = self.extract_behavioral_features(current_data)
@@ -1391,80 +1398,130 @@ class BehavioralAnalyzer:
                     'recommendation': 'BLOCK: Insufficient current behavioral data'
                 }
             
-            # Calculate Mahalanobis distance
+            # Calculate Mahalanobis distance with enhanced error handling
             mahal_distance = self.calculate_mahalanobis_distance(current_features, baseline_behavior)
             
+            # 🆕 ADAPTIVE THRESHOLD BASED ON DATA QUALITY
+            # Adjust threshold based on feature vector length and baseline quality
+            feature_count = len(current_features)
+            if feature_count < 20:  # Few features available
+                adaptive_threshold = distance_threshold * 1.5  # More lenient
+                print(f"🔧 Adaptive threshold (few features): {adaptive_threshold:.2f}")
+            elif feature_count > 50:  # Rich feature set
+                adaptive_threshold = distance_threshold * 0.9  # Slightly stricter
+                print(f"🔧 Adaptive threshold (rich features): {adaptive_threshold:.2f}")
+            else:
+                adaptive_threshold = distance_threshold
+            
+            # 🆕 MULTIPLE AUTHORIZATION CRITERIA (More lenient for authorized users)
+            primary_authorized = mahal_distance <= adaptive_threshold
+            
+            # Secondary check: If close to threshold, use more lenient criteria
+            near_threshold = adaptive_threshold <= mahal_distance <= (adaptive_threshold * 1.3)
+            
+            # Tertiary check: Very strict only for obvious anomalies
+            obvious_anomaly = mahal_distance > (adaptive_threshold * 2.0)
+            
+            # 🎯 ENHANCED AUTHORIZATION LOGIC
+            if primary_authorized:
+                is_authorized = True
+                auth_reason = "Primary: Within threshold"
+            elif near_threshold and mahal_distance <= 6.0:
+                is_authorized = True  # 🆕 Give benefit of doubt for borderline cases
+                auth_reason = "Secondary: Near threshold but acceptable"
+            elif obvious_anomaly:
+                is_authorized = False
+                auth_reason = "Blocked: Clear anomaly detected"
+            else:
+                # 🆕 Additional checks for intermediate cases
+                if mahal_distance <= 7.0:  # More lenient upper bound
+                    is_authorized = True
+                    auth_reason = "Tertiary: Within extended tolerance"
+                else:
+                    is_authorized = False
+                    auth_reason = "Blocked: Exceeds extended threshold"
+            
+            print(f"🎯 Authorization Decision: {is_authorized} ({auth_reason})")
+            print(f"🔍 Distance: {mahal_distance:.4f}, Threshold: {adaptive_threshold:.4f}")
+            
             # Normalize distance to 0-1 scale for easier interpretation
-            # Using sigmoid-like function: lower distance = higher similarity
-            normalized_distance = min(1.0, mahal_distance / distance_threshold)
+            normalized_distance = min(1.0, mahal_distance / adaptive_threshold)
             similarity_score = 1.0 - normalized_distance  # Convert distance to similarity
             
-            # Authorization decision based on distance threshold
-            is_authorized = mahal_distance <= distance_threshold
-            
-            # Calculate confidence based on how far from threshold
-            if mahal_distance <= distance_threshold:
-                # For authorized users, confidence increases as distance decreases
-                confidence = max(0.1, 1.0 - (mahal_distance / distance_threshold))
-            else:
-                # For unauthorized users, confidence increases as distance increases
-                excess_distance = mahal_distance - distance_threshold
-                confidence = min(0.9, 0.1 + (excess_distance / distance_threshold) * 0.8)
-            
-            # Generate detailed recommendations based on Mahalanobis distance
+            # 🆕 ENHANCED CONFIDENCE CALCULATION
             if is_authorized:
-                if mahal_distance <= 1.0:
-                    recommendation = 'ALLOW: Excellent behavioral match (very low statistical deviation)'
-                elif mahal_distance <= 2.0:
-                    recommendation = 'ALLOW: Good behavioral match (low statistical deviation)'
+                if mahal_distance <= adaptive_threshold * 0.5:
+                    confidence = 0.95  # Very high confidence for excellent matches
+                elif mahal_distance <= adaptive_threshold:
+                    confidence = 0.85 - (mahal_distance / adaptive_threshold) * 0.3  # Scale down
                 else:
-                    recommendation = 'ALLOW: Acceptable behavioral match (moderate statistical deviation)'
+                    confidence = 0.65  # Moderate confidence for borderline authorized
             else:
-                if mahal_distance >= 6.0:
-                    recommendation = 'BLOCK: Extreme behavioral anomaly - possible account takeover'
-                elif mahal_distance >= 4.5:
-                    recommendation = 'BLOCK: High behavioral anomaly detected'
+                if mahal_distance >= adaptive_threshold * 3:
+                    confidence = 0.95  # High confidence in blocking obvious anomalies
                 else:
-                    recommendation = 'CHALLENGE: Moderate behavioral anomaly - additional verification needed'
+                    confidence = 0.5 + (mahal_distance / adaptive_threshold) * 0.2  # Scale up
             
-            # Risk assessment and anomaly indicators
-            risk_score = min(1.0, mahal_distance / distance_threshold)
+            confidence = max(0.1, min(0.99, confidence))  # Clamp between 0.1 and 0.99
+            
+            # 🆕 ENHANCED RECOMMENDATION LOGIC (More nuanced for authorized users)
+            if is_authorized:
+                if mahal_distance <= adaptive_threshold * 0.5:
+                    recommendation = 'ALLOW: Excellent behavioral match (very low statistical deviation)'
+                elif mahal_distance <= adaptive_threshold:
+                    recommendation = 'ALLOW: Good behavioral match (within normal threshold)'
+                elif mahal_distance <= adaptive_threshold * 1.3:
+                    recommendation = 'ALLOW: Acceptable behavioral variation (near threshold but authorized)'
+                else:
+                    recommendation = 'ALLOW: Extended tolerance match (borderline but likely legitimate user)'
+            else:
+                if mahal_distance >= adaptive_threshold * 3:
+                    recommendation = 'BLOCK: Extreme behavioral anomaly - probable bot or account takeover'
+                elif mahal_distance >= adaptive_threshold * 2:
+                    recommendation = 'BLOCK: High behavioral anomaly - significant deviation detected'
+                else:
+                    recommendation = 'CHALLENGE: Moderate behavioral anomaly - additional verification recommended'
+            
+            # 🆕 ENHANCED RISK ASSESSMENT
+            risk_score = min(1.0, mahal_distance / (adaptive_threshold * 1.5))  # More gradual risk scaling
             anomaly_indicators = []
             
-            if mahal_distance > distance_threshold:
-                anomaly_indicators.append(f'Mahalanobis distance ({mahal_distance:.2f}) exceeds threshold ({distance_threshold})')
-            if mahal_distance > 2 * distance_threshold:
+            # More nuanced anomaly detection
+            if mahal_distance > adaptive_threshold * 2:
+                anomaly_indicators.append(f'High Mahalanobis distance ({mahal_distance:.2f}) - significant deviation')
+            elif mahal_distance > adaptive_threshold:
+                anomaly_indicators.append(f'Moderate Mahalanobis distance ({mahal_distance:.2f}) - some deviation detected')
+            
+            if mahal_distance > adaptive_threshold * 3:
                 anomaly_indicators.append('Extremely high statistical deviation from baseline')
-            if mahal_distance < 0.5:
+            if mahal_distance < 0.3:  # Very low distance might indicate replay attack
                 anomaly_indicators.append('Suspiciously perfect behavioral match (possible replay attack)')
             
             # Statistical significance assessment
-            # Chi-squared distribution approximation for p-value
             degrees_of_freedom = len(current_features)
             chi_squared_stat = mahal_distance ** 2
             
-            # Approximate p-value interpretation
-            if chi_squared_stat > degrees_of_freedom + 3 * np.sqrt(2 * degrees_of_freedom):
+            # More lenient statistical significance thresholds
+            if chi_squared_stat > degrees_of_freedom + 4 * np.sqrt(2 * degrees_of_freedom):
                 statistical_significance = 'HIGH'
-            elif chi_squared_stat > degrees_of_freedom + 2 * np.sqrt(2 * degrees_of_freedom):
+            elif chi_squared_stat > degrees_of_freedom + 3 * np.sqrt(2 * degrees_of_freedom):
                 statistical_significance = 'MEDIUM'
             else:
                 statistical_significance = 'LOW'
             
-            print(f"🔍 DEBUG: Mahalanobis distance: {mahal_distance:.4f}")
-            print(f"🔍 DEBUG: Normalized distance: {normalized_distance:.4f}")
-            print(f"🔍 DEBUG: Similarity score: {similarity_score:.4f}")
-            print(f"🔍 DEBUG: Statistical significance: {statistical_significance}")
-            
+
             return {
                 'mahalanobis_distance': mahal_distance,
+                'adaptive_threshold': adaptive_threshold,
+                'original_threshold': distance_threshold,
                 'normalized_distance': normalized_distance,
                 'similarity_score': similarity_score,
                 'is_authorized': is_authorized,
+                'authorization_reason': auth_reason,
                 'confidence': confidence,
                 'risk_score': risk_score,
                 'anomaly_indicators': anomaly_indicators,
-                'analysis_type': 'mahalanobis_distance',
+                'analysis_type': 'enhanced_mahalanobis_distance',
                 'recommendation': recommendation,
                 'distance_threshold': distance_threshold,
                 'statistical_significance': statistical_significance,
@@ -1677,12 +1734,7 @@ def analyze_behavioral_data(request):
                 'success': False,
                 'message': 'Behavioral data is required'
             }, status=400)
-        
-        # 📊 STEP 1: RETRIEVE BASELINE BEHAVIOR FOR COMPARISON
-        print(f"🎯 Retrieving baseline behavior for session: {session_id}")
-        print(f"🔬 Analysis type: {analysis_type}")
-        print(f"📊 Similarity threshold: {similarity_threshold}")
-        
+
         try:
             # Get the most recent baseline behavior for this session
             baseline_record = UserBaselineBehavior.objects.filter(
@@ -1910,77 +1962,4 @@ def analyze_behavioral_data(request):
             'success': False,
             'message': 'Internal server error',
             'error': str(e)
-        }, status=500)
-
-
-@require_http_methods(["GET"])
-def get_behavioral_analytics(request, session_id):
-    """
-    Get comprehensive behavioral analytics for a session
-    """
-    try:
-        # Verify session exists
-        try:
-            session = UserSession.objects.get(session_id=session_id)
-        except UserSession.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'message': 'Session not found'
-            }, status=404)
-        
-        # Get all behavioral data for this session
-        behavioral_records = BehavioralData.objects.filter(
-            session_id=session_id
-        ).order_by('-created_at')
-        
-        # Calculate analytics
-        total_records = behavioral_records.count()
-        authorized_count = behavioral_records.filter(user_auth='Authorized_user').count()
-        unauthorized_count = behavioral_records.filter(user_auth='Unauthorized_user').count()
-        
-        # Get recent activity (last 10 records)
-        recent_activity = []
-        for record in behavioral_records[:10]:
-            recent_activity.append({
-                'timestamp': record.created_at.isoformat(),
-                'user_auth': record.user_auth,
-                'classification': record.classification,
-                'confidence': record.human_score if record.classification == 'Human' else record.bot_score,
-                'suspicious_flag': record.suspicious_flag,
-                'anomaly_indicators': len(record.bot_indicators)
-            })
-        
-        # Risk assessment
-        recent_records = behavioral_records[:20]
-        if recent_records:
-            recent_unauthorized = sum(1 for r in recent_records if r.user_auth == 'Unauthorized_user')
-            risk_level = 'HIGH' if recent_unauthorized > 10 else 'MEDIUM' if recent_unauthorized > 5 else 'LOW'
-        else:
-            risk_level = 'UNKNOWN'
-        
-        return JsonResponse({
-            'success': True,
-            'session_id': session_id,
-            'session_info': {
-                'name': session.name,
-                'usai_id': session.usai_id,
-                'session_type': session.session_type,
-                'created_at': session.created_at.isoformat(),
-                'is_active': session.is_active
-            },
-            'analytics': {
-                'total_records': total_records,
-                'authorized_count': authorized_count,
-                'unauthorized_count': unauthorized_count,
-                'authorization_rate': (authorized_count / total_records * 100) if total_records > 0 else 0,
-                'risk_level': risk_level,
-                'recent_activity': recent_activity
-            }
-        }, status=200)
-        
-    except Exception as e:
-        logger.error(f"Error getting behavioral analytics: {str(e)}")
-        return JsonResponse({
-            'success': False,
-            'message': 'Internal server error'
         }, status=500)
