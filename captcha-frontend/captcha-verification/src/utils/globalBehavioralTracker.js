@@ -38,7 +38,7 @@ class GlobalBehavioralTracker {
       // Baseline collection state
       isCollectingBaseline: false,
       baselineCollectionStartTime: null,
-      baselineCollectionDuration: 20000, // 20 seconds baseline collection
+      baselineCollectionDuration: 45000, // 45 seconds baseline collection
       baselineCompleted: false,
       continuousTransmissionStarted: false, // 🚨 PREVENT DOUBLE TRANSMISSION START
       baselineBehaviorData: null,
@@ -828,7 +828,10 @@ class GlobalBehavioralTracker {
           (performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0) : 0,
         mouseMovementFrequency: 0,
         keyPressFrequency: 0,
-        clickFrequency: 0
+        clickFrequency: 0,
+        pageLoadTime: performance.timing ? 
+          (performance.timing.loadEventEnd - performance.timing.navigationStart) : 1200,
+        timeToFirstClick: 0 // Will be set when first click occurs
       };
       
       console.log('🔍 Device fingerprinting completed:', {
@@ -1080,6 +1083,11 @@ class GlobalBehavioralTracker {
   trackClick(event) {
     const now = Date.now();
     
+    // 🎯 Track time to first click
+    if (this.behavioralData.timingMetrics.timeToFirstClick === 0) {
+      this.behavioralData.timingMetrics.timeToFirstClick = now - this.behavioralData.trackingStartTime;
+    }
+    
     // 🎯 RECORD BASELINE EVENT if collecting baseline
     if (this.behavioralData.isCollectingBaseline) {
       this.recordBaselineEvent('click', event, now);
@@ -1323,6 +1331,15 @@ class GlobalBehavioralTracker {
       // 🔧 Convert frontend data to backend format (Django model structure)
       const convertedBehavioralData = this.convertToBackendFormat();
       
+      // 🔍 DEBUG: Log the converted data format
+      console.log('🔧 Converted behavioral data format:', {
+        cursor_movements_length: convertedBehavioralData.cursor_movements?.length || 0,
+        cursor_movements_sample: convertedBehavioralData.cursor_movements?.slice(0, 3),
+        original_movements_sample: this.behavioralData.cursorMovements?.slice(0, 3),
+        total_time: convertedBehavioralData.total_time,
+        action_count: convertedBehavioralData.action_count
+      });
+      
       // Send full behavioral payload for continuous monitoring (post-baseline)
       console.log('📤 Sending cosine similarity behavioral payload to backend...', {
         sessionId: this.sessionId,
@@ -1407,11 +1424,35 @@ class GlobalBehavioralTracker {
       const totalTime = Date.now() - (this.behavioralData.trackingStartTime || Date.now());
       const clickIntervals = this.calculateClickIntervals();
       const suspiciousFeatureRatio = this.calculateSuspiciousFeatureRatio();
+      const averageSpeed = this.calculateAverageSpeed();
+      const maxSpeed = this.calculateMaxSpeed();
+      const cursorAngleVariance = this.calculateCursorAngleVariance();
+      const cursorEntropy = this.calculateCursorEntropy();
+      
+      // Analyze behavioral patterns
+      const keyboardPatterns = this.analyzeKeyboardPatterns();
+      const suspiciousPatterns = this.detectSuspiciousPatterns();
+      const humanIndicators = this.detectHumanIndicators();
+      const botIndicators = this.detectBotIndicators();
+      
+      // Calculate human/bot scores
+      const humanScore = this.calculateHumanScore();
+      const botScore = 1 - humanScore;
+      
+      // Detect automation signals
+      const isAutomatedBrowser = this.detectAutomatedBrowser();
+      const evasionSignals = this.detectEvasionSignals();
+      
+      // Get device fingerprinting data
+      const deviceFingerprint = this.generateDeviceFingerprint();
+      const canvasMetrics = this.getCanvasMetrics();
+      const gpuInfo = this.getGPUInfo();
+      const screenResolution = this.getScreenResolution();
       
       // Map frontend data to Django model fields exactly
       const backendData = {
-        // Core behavioral data
-        cursor_movements: this.behavioralData.cursorMovements || [],
+        // Core behavioral data - convert cursor movements to coordinate pairs
+        cursor_movements: (this.behavioralData.cursorMovements || []).map(point => [point.x, point.y]),
         key_press_times: this.behavioralData.keyPressTimes || [],
         key_hold_times: this.behavioralData.keyHoldTimes || [],
         click_timestamps: this.behavioralData.clickTimestamps || [],
@@ -1423,63 +1464,68 @@ class GlobalBehavioralTracker {
         // Boolean and basic fields
         paste_detected: this.behavioralData.pasteDetected || false,
         total_time: Math.floor(totalTime),
-        classification: 'Unknown', // Will be determined by backend
-        human_score: 0.5, // Default neutral score
-        bot_score: 0.5, // Default neutral score
+        
+        // Classification and scores
+        classification: humanScore > 0.6 ? "Human" : (botScore > 0.6 ? "Bot" : "Unknown"),
+        human_score: parseFloat(humanScore.toFixed(2)),
+        bot_score: parseFloat(botScore.toFixed(2)),
         
         // Indicator arrays
-        human_indicators: [], // Will be filled by backend analysis
-        bot_indicators: this.behavioralData.suspiciousPatterns || [],
+        human_indicators: humanIndicators,
+        bot_indicators: botIndicators,
         
         // Fingerprinting and detection scores
-        bot_fingerprint_score: this.behavioralData.botFingerprintScore || 0,
-        suspicious_flag: false, // Will be determined by backend
-        suspicious_feature_ratio: suspiciousFeatureRatio,
+        bot_fingerprint_score: parseFloat((botScore * 0.1).toFixed(2)),
+        suspicious_flag: suspiciousPatterns.length > 0 || botScore > 0.7,
+        suspicious_feature_ratio: parseFloat(suspiciousFeatureRatio.toFixed(2)),
         
         // Enhanced metrics - debug data
         mouse_movement_debug: {
-          trajectory: this.behavioralData.mouseTrajectory || [],
-          jitter: this.behavioralData.mouseJitter || [],
-          microJitter: this.behavioralData.cursorMicroJitter || 0,
-          pathEntropy: this.behavioralData.pathEntropy || 0,
-          accelerationVariance: this.behavioralData.accelerationVariance || 0
+          raw_path_points: (this.behavioralData.cursorMovements || []).map(point => [point.x, point.y]),
+          filtered_points: (this.behavioralData.cursorMovements || []).map(point => [point.x, point.y])
         },
         
         speed_calculation_debug: {
-          allSpeeds: this.behavioralData.allSpeeds || [],
-          latestSpeed: this.behavioralData.latestSpeed || 0,
-          averageSpeed: this.calculateAverageSpeed(),
-          speedVariance: this.calculateSpeedVariance()
+          average_speed: parseFloat(averageSpeed.toFixed(2)),
+          max_speed: parseFloat(maxSpeed.toFixed(2))
         },
         
-        post_paste_activity: this.behavioralData.postPasteActivity || {},
-        keyboard_patterns: this.behavioralData.keyboardPatterns || [],
-        suspicious_patterns: this.behavioralData.suspiciousPatterns || [],
+        post_paste_activity: {
+          keypress_after_paste: this.behavioralData.postPasteActivity?.keypressAfterPaste || 0
+        },
+        
+        keyboard_patterns: keyboardPatterns,
+        suspicious_patterns: suspiciousPatterns,
         
         // Counters and metrics
         action_count: this.behavioralData.actionCount || 0,
-        is_automated_browser: this.behavioralData.isAutomatedBrowser || false,
-        cursor_entropy: this.behavioralData.cursorEntropy || 0,
+        is_automated_browser: isAutomatedBrowser,
+        cursor_entropy: parseFloat(cursorEntropy.toFixed(2)),
         scroll_speeds: this.behavioralData.scrollSpeeds || [],
         scroll_changes: this.behavioralData.scrollChanges || 0,
         idle_time: this.behavioralData.idleTime || 0,
         
         // Additional detection fields
-        honeypot_value: null, // Would be set if honeypot is triggered
-        TabKeyCount: this.behavioralData.TabKeyCount || 0,
-        cursorAngleVariance: this.calculateCursorAngleVariance(),
-        mouseJitter: this.behavioralData.mouseJitter || [],
-        micropause: this.behavioralData.microPauses || [],
-        hesitation: this.behavioralData.hesitationTimes || [],
+        honeypot_value: this.behavioralData.honeypotValue || "",
+        tabkeycount: this.behavioralData.TabKeyCount || 0,
+        cursorAngleVariance: parseFloat(cursorAngleVariance.toFixed(3)),
+        mouseJitter: (this.behavioralData.mouseJitter || []).map(j => parseFloat((j.distance || 0).toFixed(3))),
+        micropause: (this.behavioralData.microPauses || []).map(p => p.duration || 0),
+        hesitation: (this.behavioralData.hesitationTimes || []).map(h => h.duration || 0),
         
         // Device and fingerprinting
-        devicefingerprint: String(this.behavioralData.deviceFingerprint || '0'),
-        missing_canvas_fingerprint: this.behavioralData.missingCanvasFingerprint || false,
-        canvas_metrics: this.behavioralData.canvasMetrics || {},
-        unsualscreenresolution: this.behavioralData.unusualScreenResolution || {},
-        gpu_info: this.behavioralData.gpuInfo || {},
-        timing_metrics: this.behavioralData.timingMetrics || {},
-        evasion_signals: this.behavioralData.evasionSignals || {}
+        devicefingerprint: deviceFingerprint,
+        missing_canvas_fingerprint: !canvasMetrics.hash,
+        canvas_metrics: canvasMetrics,
+        unsualscreenresolution: screenResolution,
+        gpu_info: gpuInfo,
+        
+        timing_metrics: {
+          page_load_time: this.behavioralData.timingMetrics?.pageLoadTime || 0,
+          time_to_first_click: this.behavioralData.timingMetrics?.timeToFirstClick || 0
+        },
+        
+        evasion_signals: evasionSignals
       };
 
       console.log('🔧 Converted frontend data to backend format:', {
@@ -1487,7 +1533,10 @@ class GlobalBehavioralTracker {
         cursorMovements: backendData.cursor_movements.length,
         keyPresses: backendData.key_press_times.length,
         clicks: backendData.click_timestamps.length,
-        actionCount: backendData.action_count
+        actionCount: backendData.action_count,
+        humanScore: backendData.human_score,
+        botScore: backendData.bot_score,
+        classification: backendData.classification
       });
 
       return backendData;
@@ -1517,12 +1566,17 @@ class GlobalBehavioralTracker {
   }
 
   calculateAverageSpeed() {
-    const speeds = this.behavioralData.allSpeeds || [];
+    const speeds = this.behavioralData.cursorSpeeds || [];
     return speeds.length > 0 ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0;
   }
 
+  calculateMaxSpeed() {
+    const speeds = this.behavioralData.cursorSpeeds || [];
+    return speeds.length > 0 ? Math.max(...speeds) : 0;
+  }
+
   calculateSpeedVariance() {
-    const speeds = this.behavioralData.allSpeeds || [];
+    const speeds = this.behavioralData.cursorSpeeds || [];
     if (speeds.length < 2) return 0;
     
     const mean = this.calculateAverageSpeed();
@@ -1537,6 +1591,325 @@ class GlobalBehavioralTracker {
     const mean = angles.reduce((sum, angle) => sum + angle, 0) / angles.length;
     const variance = angles.reduce((sum, angle) => sum + Math.pow(angle - mean, 2), 0) / angles.length;
     return variance;
+  }
+
+  calculateCursorEntropy() {
+    const movements = this.behavioralData.cursorMovements || [];
+    if (movements.length < 2) return 0;
+    
+    // Calculate entropy based on movement patterns
+    const distances = [];
+    for (let i = 1; i < movements.length; i++) {
+      const dx = movements[i].x - movements[i-1].x;
+      const dy = movements[i].y - movements[i-1].y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      distances.push(distance);
+    }
+    
+    // Simple entropy calculation
+    if (distances.length === 0) return 0;
+    const mean = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+    const variance = distances.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) / distances.length;
+    return Math.min(0.99, variance / (mean + 1)); // Normalize to 0-1 range
+  }
+
+  analyzeKeyboardPatterns() {
+    const patterns = [];
+    const keyTimes = this.behavioralData.keyPressTimes || [];
+    
+    if (keyTimes.length > 1) {
+      // Analyze typing rhythm
+      const intervals = [];
+      for (let i = 1; i < keyTimes.length; i++) {
+        intervals.push(keyTimes[i] - keyTimes[i-1]);
+      }
+      
+      const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+      
+      if (avgInterval < 100) {
+        patterns.push("fast_typing");
+      } else if (avgInterval > 300) {
+        patterns.push("slow_typing");
+      } else {
+        patterns.push("normal_typing");
+      }
+      
+      // Check for pauses
+      const longPauses = intervals.filter(interval => interval > 1000);
+      if (longPauses.length > 0) {
+        patterns.push("pause_resume_typing");
+      }
+      
+      // Check for consistent timing
+      const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
+      if (variance < avgInterval * 0.1) {
+        patterns.push("consistent_timing");
+      } else {
+        patterns.push("variable_typing_speed");
+      }
+    }
+    
+    return patterns;
+  }
+
+  detectSuspiciousPatterns() {
+    const patterns = [];
+    
+    // Check for very regular timing
+    const keyTimes = this.behavioralData.keyPressTimes || [];
+    if (keyTimes.length > 3) {
+      const intervals = [];
+      for (let i = 1; i < keyTimes.length; i++) {
+        intervals.push(keyTimes[i] - keyTimes[i-1]);
+      }
+      
+      const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+      const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
+      
+      if (variance < avgInterval * 0.05) {
+        patterns.push("too_regular_timing");
+      }
+    }
+    
+    // Check for impossible speeds
+    const speeds = this.behavioralData.cursorSpeeds || [];
+    const impossibleSpeeds = speeds.filter(speed => speed > 3000); // Pixels per second
+    if (impossibleSpeeds.length > speeds.length * 0.1) {
+      patterns.push("impossible_mouse_speed");
+    }
+    
+    // Check for straight line movements
+    const movements = this.behavioralData.cursorMovements || [];
+    if (movements.length > 10) {
+      let straightLines = 0;
+      for (let i = 2; i < movements.length; i++) {
+        const p1 = movements[i-2], p2 = movements[i-1], p3 = movements[i];
+        // Calculate if points are nearly collinear
+        const area = Math.abs((p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y));
+        if (area < 1) straightLines++;
+      }
+      
+      if (straightLines > movements.length * 0.8) {
+        patterns.push("too_many_straight_lines");
+      }
+    }
+    
+    return patterns;
+  }
+
+  detectHumanIndicators() {
+    const indicators = [];
+    
+    // Smooth mouse movements
+    const movements = this.behavioralData.cursorMovements || [];
+    if (movements.length > 5) {
+      let smoothMovements = 0;
+      for (let i = 1; i < movements.length; i++) {
+        const dx = movements[i].x - movements[i-1].x;
+        const dy = movements[i].y - movements[i-1].y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > 1 && distance < 50) smoothMovements++;
+      }
+      
+      if (smoothMovements > movements.length * 0.6) {
+        indicators.push("smooth_mouse");
+      }
+    }
+    
+    // Variable typing speed
+    const patterns = this.analyzeKeyboardPatterns();
+    if (patterns.includes("variable_typing_speed")) {
+      indicators.push("variable_typing_speed");
+    }
+    
+    // Natural hesitation
+    const hesitations = this.behavioralData.hesitationTimes || [];
+    if (hesitations.length > 0) {
+      indicators.push("natural_hesitation");
+    }
+    
+    // Mouse jitter (natural micro-movements)
+    const jitter = this.behavioralData.mouseJitter || [];
+    if (jitter.length > 0 && jitter.length < movements.length * 0.1) {
+      indicators.push("natural_micro_movements");
+    }
+    
+    return indicators;
+  }
+
+  detectBotIndicators() {
+    const indicators = [];
+    const suspicious = this.detectSuspiciousPatterns();
+    
+    suspicious.forEach(pattern => {
+      switch (pattern) {
+        case "too_regular_timing":
+          indicators.push("robotic_timing");
+          break;
+        case "impossible_mouse_speed":
+          indicators.push("impossible_speeds");
+          break;
+        case "too_many_straight_lines":
+          indicators.push("mechanical_movements");
+          break;
+      }
+    });
+    
+    return indicators;
+  }
+
+  calculateHumanScore() {
+    let score = 0.5; // Start neutral
+    
+    const humanIndicators = this.detectHumanIndicators();
+    const botIndicators = this.detectBotIndicators();
+    
+    // Add points for human indicators
+    score += humanIndicators.length * 0.1;
+    
+    // Subtract points for bot indicators
+    score -= botIndicators.length * 0.15;
+    
+    // Bonus for natural behavior patterns
+    const movements = this.behavioralData.cursorMovements || [];
+    const keyTimes = this.behavioralData.keyPressTimes || [];
+    
+    if (movements.length > 10 && keyTimes.length > 5) {
+      score += 0.1; // Bonus for sufficient activity
+    }
+    
+    // Ensure score is between 0 and 1
+    return Math.max(0, Math.min(1, score));
+  }
+
+  detectAutomatedBrowser() {
+    // Check for automation indicators
+    const botIndicators = this.detectBotIndicators();
+    const suspiciousPatterns = this.detectSuspiciousPatterns();
+    
+    // Check for webdriver properties
+    const hasWebDriver = navigator.webdriver || window.webdriver;
+    
+    // Check for automation frameworks
+    const hasPhantom = window.phantom || window._phantom;
+    const hasSelenium = window.selenium || window.__selenium_unwrapped;
+    
+    return hasWebDriver || hasPhantom || hasSelenium || 
+           botIndicators.length > 2 || suspiciousPatterns.length > 3;
+  }
+
+  detectEvasionSignals() {
+    return {
+      headless_mode: navigator.webdriver === true,
+      devtools_open: this.detectDevToolsOpen(),
+      phantom_detected: !!(window.phantom || window._phantom),
+      selenium_detected: !!(window.selenium || window.__selenium_unwrapped),
+      webdriver_detected: !!navigator.webdriver
+    };
+  }
+
+  detectDevToolsOpen() {
+    // Simple detection method - there are more sophisticated ways
+    let devtools = false;
+    const threshold = 160;
+    
+    try {
+      if (window.outerHeight - window.innerHeight > threshold || 
+          window.outerWidth - window.innerWidth > threshold) {
+        devtools = true;
+      }
+    } catch (e) {
+      // Silent fail
+    }
+    
+    return devtools;
+  }
+
+  generateDeviceFingerprint() {
+    // Create a simple device fingerprint
+    const components = [
+      navigator.userAgent,
+      navigator.language,
+  window.screen.width + 'x' + window.screen.height,
+      new Date().getTimezoneOffset(),
+      navigator.platform,
+      navigator.cookieEnabled
+    ];
+    
+    // Simple hash function
+    let hash = 0;
+    const str = components.join('|');
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return Math.abs(hash).toString(16);
+  }
+
+  getCanvasMetrics() {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 200;
+      canvas.height = 50;
+      
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('Canvas fingerprint', 2, 2);
+      
+      const dataURL = canvas.toDataURL();
+      
+      // Simple hash of canvas data
+      let hash = 0;
+      for (let i = 0; i < dataURL.length; i++) {
+        const char = dataURL.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        hash: Math.abs(hash).toString(16).substring(0, 9)
+      };
+    } catch (e) {
+      return { width: 0, height: 0, hash: null };
+    }
+  }
+
+  getGPUInfo() {
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+          const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+          const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+          
+          return {
+            vendor: vendor || 'Unknown',
+            model: renderer || 'Unknown'
+          };
+        }
+      }
+    } catch (e) {
+      // Silent fail
+    }
+    
+    return { vendor: 'Unknown', model: 'Unknown' };
+  }
+
+  getScreenResolution() {
+    return {
+      width: window.screen.width,
+      height: window.screen.height,
+      unusual: window.screen.width < 800 || window.screen.height < 600 || 
+               window.screen.width > 3840 || window.screen.height > 2160
+    };
   }
 
   setupUnloadHandler() {
@@ -2871,21 +3244,17 @@ class GlobalBehavioralTracker {
     if (!this.behavioralData.baselineBehaviorData) {
       return;
     }
-    
     try {
-      const baselineMetrics = this.calculateBaselineMetrics();
-      
+      // Temporarily swap behavioralData for baselineBehaviorData
+      const originalBehavioralData = this.behavioralData;
+      this.behavioralData = { ...this.behavioralData, ...this.behavioralData.baselineBehaviorData };
+      const convertedBaselineData = this.convertToBackendFormat();
+      // Restore behavioralData
+      this.behavioralData = originalBehavioralData;
       const payload = {
         session_id: this.sessionId,
-        baseline_data: {
-          ...this.behavioralData.baselineBehaviorData,
-          metrics: baselineMetrics,
-          sessionId: this.sessionId,
-          timestamp: Date.now(),
-          currentPage: this.behavioralData.currentPage || 'unknown'
-        }
+        baseline_data: convertedBaselineData
       };
-      
       const response = await fetch('http://127.0.0.1:8000/user/baseline-storage/', {
         method: 'POST',
         headers: {
@@ -2893,17 +3262,12 @@ class GlobalBehavioralTracker {
         },
         body: JSON.stringify(payload)
       });
-      
       if (response.ok) {
         const result = await response.json();
-        
-        // Store baseline analysis result
         this.behavioralData.baselineAnalysisResult = result;
         this.behavioralData.baselineAnalysisTime = Date.now();
-        
         return result;
       } else {
-        // Try to get error response body
         try {
           const errorBody = await response.text();
         } catch (e) {

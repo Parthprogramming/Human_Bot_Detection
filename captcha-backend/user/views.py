@@ -19,12 +19,6 @@ import threading
 import time
 from zoneinfo import ZoneInfo
 
-# Import the new improved identity detection system
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from improved_identity_detector import analyze_user_identity
-
 logger = logging.getLogger(__name__)
 
 
@@ -451,22 +445,36 @@ class BehavioralAnalyzer:
         try:
             print(f"🔍 Performing simple behavioral validation...")
             
-            # Count total interactions
+            # Count total interactions - handle both current behavioral data and baseline data formats
             cursor_movements = len(behavioral_data.get('cursor_movements', [])) + len(behavioral_data.get('cursorMovements', []))
             key_presses = len(behavioral_data.get('key_press_times', [])) + len(behavioral_data.get('keyPressTimes', []))
             clicks = len(behavioral_data.get('click_timestamps', [])) + len(behavioral_data.get('clickTimestamps', []))
+            
+            # Check if this is baseline data (array of mouse position objects)
+            if isinstance(behavioral_data, list):
+                cursor_movements = len(behavioral_data)  # Each item is a mouse movement
+                print(f"📊 Detected baseline data format: {cursor_movements} mouse movements")
+            
             total_interactions = cursor_movements + key_presses + clicks
             
             # Check for automation signals
-            evasion_signals = behavioral_data.get('evasion_signals', {})
+            evasion_signals = behavioral_data.get('evasion_signals', {}) if isinstance(behavioral_data, dict) else {}
             automation_count = sum(1 for v in evasion_signals.values() if v) if evasion_signals else 0
             
             # Check for paste behavior (common bot indicator)
-            paste_detected = behavioral_data.get('paste_detected', False)
+            paste_detected = behavioral_data.get('paste_detected', False) if isinstance(behavioral_data, dict) else False
             
             # Check timing patterns
-            total_time = behavioral_data.get('total_time', 0)
-            interaction_rate = total_interactions / max(total_time / 1000, 1) if total_time > 0 else 0
+            if isinstance(behavioral_data, dict):
+                total_time = behavioral_data.get('total_time', 0)
+                interaction_rate = total_interactions / max(total_time / 1000, 1) if total_time > 0 else 0
+            else:
+                # For baseline data, calculate time span from timestamps
+                if len(behavioral_data) > 1:
+                    time_span = behavioral_data[-1].get('timestamp', 0) - behavioral_data[0].get('timestamp', 0)
+                    interaction_rate = total_interactions / max(time_span / 1000, 1) if time_span > 0 else 0
+                else:
+                    interaction_rate = 0
             
             print(f"📊 Simple validation metrics:")
             print(f"   Total interactions: {total_interactions}")
@@ -1060,7 +1068,7 @@ class BehavioralAnalyzer:
 
             # 🔒 STEP 6: EXTREMELY LENIENT REAL-WORLD IDENTITY VERIFICATION
             # Use VERY LARGE threshold to accommodate massive real-world behavioral variation
-            base_threshold = 12.0  # Very large threshold for real-world behavioral variation
+            base_threshold = 20.0  # Very large threshold for real-world behavioral variation
             behavioral_threshold = 0
             # Adjust threshold based on data quality and context
             current_data_quality = self.assess_behavioral_data_quality(current_data)
@@ -1071,22 +1079,22 @@ class BehavioralAnalyzer:
             
             if current_data_quality >= 0.8:
                 # High quality data = use BALANCED threshold for user detection
-                behavioral_threshold = base_threshold  # 3.0σ - balanced
+                behavioral_threshold = base_threshold  # 20.0σ - balanced
                 threshold_reason = "high-quality behavioral data"
                 print(f"   - Path: High quality (>= 0.8), threshold = {behavioral_threshold}")
             elif current_data_quality >= 0.6:
                 # Medium quality data = slightly more lenient
-                behavioral_threshold = base_threshold + 0.5  # 3.5σ
+                behavioral_threshold = base_threshold + 0.5  # 20.5σ
                 threshold_reason = "medium-quality behavioral data"
                 print(f"   - Path: Medium quality (>= 0.6), threshold = {behavioral_threshold}")
             elif current_data_quality >= 0.4:
                 # Low quality data = more lenient
-                behavioral_threshold = base_threshold + 1.0  # 4.0σ
+                behavioral_threshold = base_threshold + 1.0  # 21.0σ
                 threshold_reason = "low-quality behavioral data"
                 print(f"   - Path: Low quality (>= 0.4), threshold = {behavioral_threshold}")
             else:
                 # Very low quality data = lenient but still secure
-                behavioral_threshold = base_threshold + 1.5  # 4.5σ
+                behavioral_threshold = base_threshold + 1.5  # 21.5σ
                 threshold_reason = "very-low-quality behavioral data"
                 print(f"   - Path: Very low quality (< 0.4), threshold = {behavioral_threshold}")
             
@@ -1785,7 +1793,20 @@ class BehavioralAnalyzer:
         try:
             features = []
             
-            print(f"� Extracting comprehensive features from ALL behavioral data...")
+            print(f"🔍 Extracting comprehensive features from ALL behavioral data...")
+            print(f"   Data type: {type(behavioral_data)}")
+            
+            # Handle list format baseline data (array of mouse movements)
+            if isinstance(behavioral_data, list):
+                print(f"   Converting list format data ({len(behavioral_data)} movements) to dict format")
+                # Convert list of mouse movements to dictionary format
+                behavioral_data = {
+                    'cursor_movements': behavioral_data,
+                    'cursorMovements': behavioral_data,
+                    'key_press_times': [],
+                    'click_timestamps': [],
+                    'total_time': behavioral_data[-1].get('timestamp', 0) - behavioral_data[0].get('timestamp', 0) if len(behavioral_data) > 1 else 0
+                }
             
             # 📊 FIRST: Calculate comprehensive metrics to get derived features
             comprehensive_metrics = self.calculate_behavioral_metrics(behavioral_data)
@@ -2668,14 +2689,72 @@ def analyze_behavioral_data(request):
         # Enhanced analysis with baseline comparison using improved identity detection
         if 'analysis_result' not in locals():
             # Only run analysis if we haven't already created a result for new users
-            print(f"🧠 Running improved user identity analysis...")
+            print(f"🧠 Running behavioral analysis...")
             
-            # Use the new improved identity detection system
-            analysis_result = analyze_user_identity(
-                current_data=behavioral_data,
-                baseline_data=baseline_behavior if baseline_behavior else {},
-                session_id=session_id
-            )
+            # Use existing behavioral analysis methods instead of external function
+            # Try to find existing user baseline for comparison
+            user_id = behavioral_data.get('user_id') or behavioral_data.get('usai_id')
+            
+            # Check if we have meaningful baseline data (not just empty or minimal data)
+            has_meaningful_baseline = False
+            if baseline_behavior:
+                if isinstance(baseline_behavior, dict):
+                    # Dictionary format baseline data
+                    has_meaningful_baseline = (len(baseline_behavior) > 0 and
+                                             (baseline_behavior.get('cursor_movements') or 
+                                              baseline_behavior.get('cursorMovements') or
+                                              baseline_behavior.get('key_press_times') or
+                                              baseline_behavior.get('keyPressTimes')))
+                elif isinstance(baseline_behavior, list):
+                    # List format baseline data (mouse movements array)
+                    has_meaningful_baseline = len(baseline_behavior) > 5  # At least 5 interactions
+            
+            print(f"🔍 ROUTING DEBUG:")
+            print(f"   user_id: {user_id}")
+            print(f"   baseline_behavior type: {type(baseline_behavior)}")
+            print(f"   baseline_behavior length: {len(baseline_behavior) if baseline_behavior else 0}")
+            print(f"   has_meaningful_baseline: {has_meaningful_baseline}")
+            
+            # Use baseline comparison if we have meaningful baseline data (user_id is helpful but not required)
+            if has_meaningful_baseline:
+                # Use existing baseline comparison method
+                print(f"🔍 Using baseline comparison for user {user_id}")
+                analysis_result = behavioral_analyzer.analyze_with_baseline_comparison(
+                    session_id=session_id,
+                    current_data=behavioral_data,   
+                    baseline_behavior_or_user_id=baseline_behavior
+                )
+            else:
+                # Use simple behavioral validation for new users or missing baselines
+                print(f"🔍 Using simple behavioral validation - user_id: {user_id}, has_baseline: {has_meaningful_baseline}")
+                simple_result = behavioral_analyzer.simple_behavioral_validation(behavioral_data)
+                analysis_result = {
+                    'is_authorized': simple_result.get('is_authorized', False),
+                    'identity_score': simple_result.get('confidence', 0.5),
+                    'confidence': simple_result.get('confidence', 0.5),
+                    'risk_score': 1.0 - simple_result.get('confidence', 0.5),
+                    'authorization_reason': simple_result.get('reason', 'BEHAVIORAL_VALIDATION'),
+                    'validation_type': simple_result.get('validation_type', 'simple_validation'),
+                    'recommendation': simple_result.get('reason', 'BEHAVIORAL_VALIDATION'),
+                    'risk_factors': [
+                        {
+                            'metric': 'simple_behavioral_validation',
+                            'severity': 'LOW' if simple_result.get('is_authorized', False) else 'MEDIUM',
+                            'value': simple_result.get('confidence', 0.5),
+                            'threshold': 0.5,
+                            'description': simple_result.get('reason', 'Simple behavioral validation')
+                        }
+                    ],
+                    'suspicious_indicators': [],
+                    'analysis_type': 'simple_behavioral_validation',
+                    'mahalanobis_distance': 0.0,
+                    'standard_deviations': 0.0
+                }
+                
+                print(f"🔍 SIMPLE VALIDATION RESULT:")
+                print(f"   is_authorized: {analysis_result['is_authorized']}")
+                print(f"   authorization_reason: {analysis_result['authorization_reason']}")
+                print(f"   confidence: {analysis_result['confidence']}")
             
             print(f"🎯 Identity Analysis Result:")
             print(f"   Authorized: {analysis_result.get('is_authorized', False)}")
@@ -2793,6 +2872,7 @@ def analyze_behavioral_data(request):
                 'risk_factors': analysis_result['risk_factors'],
                 'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
                 'recommendation': analysis_result['recommendation'],
+                'authorization_reason': analysis_result.get('authorization_reason', analysis_result['recommendation']),
                 'analysis_type': analysis_result.get('analysis_type', 'enhanced_mahalanobis_distance'),
                 'analysis_timestamp': timezone.now().isoformat(),
                 'record_id': behavioral_record.id,
@@ -2828,6 +2908,7 @@ def analyze_behavioral_data(request):
             'suspicious_indicators': analysis_result.get('suspicious_indicators', []),
             'human_indicators': analysis_result.get('human_indicators', []),
             'recommendation': analysis_result['recommendation'],
+            'authorization_reason': analysis_result.get('authorization_reason', analysis_result['recommendation']),
             'analysis_type': analysis_result.get('analysis_type', 'enhanced_mahalanobis_distance'),
             'analysis_timestamp': timezone.now().isoformat(),
             'profile_size': analysis_result.get('profile_size', 0),
