@@ -1,0 +1,130 @@
+{
+  "your_result": {
+    "is_authorized": true,
+    "confidence": 0.9169118619775459,
+    "anomaly_score": 0.05,
+    "risk_score": 0.05,
+    "authorization_reason": "CONFIDENCE_EXCEEDS_RISK: Confidence score (0.917) exceeds risk score (0.050) - Authorized user classification",
+    "recommendation": "ALLOW: Confidence score (0.917) higher than risk score (0.050) - User classified as authorized",
+    "mahalanobis_distance": 1.5579025879210135,
+    "standard_deviations": 0.9347415527526081,
+    "sigma_threshold": 4.5,
+    "within_behavioral_threshold": true,
+    "risk_level": "VERY_LOW",
+    "features_analyzed": 79,
+    "degrees_of_freedom": 79,
+    "baseline_variations_used": 14,
+    "behavioral_scaling_factor": 1.0,
+    "statistical_significance": "HIGH",
+    "risk_factors": [
+      {
+        "metric": "adaptive_behavioral_threshold",
+        "severity": "LOW",
+        "value": 0.9347415527526081,
+        "threshold": 4.5,
+        "data_quality": 0.8
+      },
+      {
+        "metric": "unusual_patterns",
+        "severity": "LOW",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "metric": "behavioral_consistency",
+        "severity": "LOW",
+        "value": 1.0,
+        "threshold": 0.6
+      }
+    ],
+    "suspicious_indicators": [],
+    "data_quality_metrics": {
+      "current_data_quality": 0.8,
+      "baseline_data_quality": 0.8,
+      "behavioral_consistency": 1.0,
+      "total_interactions": 44,
+      "unusual_patterns": 0,
+      "threshold_adaptation": "high-quality behavioral data"
+    },
+    "analysis_type": "enhanced_adaptive_behavioral_analysis",
+    "adaptive_threshold": 4.5,
+    "threshold_adaptation_reason": "high-quality behavioral data",
+    "baseline_source": "Direct baseline data",
+    "user_id": "direct_baseline",
+    "session_id": "your_session",
+    "timestamp": "2025-08-14T13:29:52.532742+00:00",
+    "robust_analysis_compliant": true,
+    "statistical_method": "Enhanced Mahalanobis distance with adaptive behavioral threshold",
+    "multi_layer_validation": true,
+    "unauthorized_user_detection_active": true,
+    "profile_size": 14
+  },
+  "friend_result": {
+    "is_authorized": false,
+    "confidence": 0.8099999999999999,
+    "anomaly_score": 0.9,
+    "risk_score": 0.9,
+    "authorization_reason": "RISK_EXCEEDS_CONFIDENCE: Risk score (0.900) exceeds confidence score (0.810) - Unauthorized user classification",
+    "recommendation": "BLOCK: Risk score (0.900) higher than confidence score (0.810) - User classified as unauthorized",
+    "mahalanobis_distance": 12.0,
+    "standard_deviations": 7.199999999999999,
+    "sigma_threshold": 4.5,
+    "within_behavioral_threshold": false,
+    "risk_level": "CRITICAL",
+    "features_analyzed": 79,
+    "degrees_of_freedom": 79,
+    "baseline_variations_used": 14,
+    "behavioral_scaling_factor": 1.0,
+    "statistical_significance": "HIGH",
+    "risk_factors": [
+      {
+        "metric": "adaptive_behavioral_threshold",
+        "severity": "HIGH",
+        "value": 7.199999999999999,
+        "threshold": 4.5,
+        "data_quality": 0.8
+      },
+      {
+        "metric": "unusual_patterns",
+        "severity": "LOW",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "metric": "behavioral_consistency",
+        "severity": "HIGH",
+        "value": 0.2746475487492753,
+        "threshold": 0.6
+      }
+    ],
+    "suspicious_indicators": [
+      "Exceeds behavioral threshold (7.20\u03c3 > 4.5\u03c3)",
+      "High risk classification: CRITICAL",
+      "Significant behavioral difference (7.20\u03c3) - likely different user",
+      "Low behavioral consistency (27.5%) - unauthorized user concern",
+      "Multi-factor unauthorized user risk (score=1.250)"
+    ],
+    "data_quality_metrics": {
+      "current_data_quality": 0.8,
+      "baseline_data_quality": 0.8,
+      "behavioral_consistency": 0.2746475487492753,
+      "total_interactions": 61,
+      "unusual_patterns": 0,
+      "threshold_adaptation": "high-quality behavioral data"
+    },
+    "analysis_type": "enhanced_adaptive_behavioral_analysis",
+    "adaptive_threshold": 4.5,
+    "threshold_adaptation_reason": "high-quality behavioral data",
+    "baseline_source": "Direct baseline data",
+    "user_id": "direct_baseline",
+    "session_id": "friend_session",
+    "timestamp": "2025-08-14T13:29:52.543566+00:00",
+    "robust_analysis_compliant": true,
+    "statistical_method": "Enhanced Mahalanobis distance with adaptive behavioral threshold",
+    "multi_layer_validation": true,
+    "unauthorized_user_detection_active": true,
+    "profile_size": 14
+  },
+  "analysis_timestamp": "2025-08-14T18:59:52.546565",
+  "issue_confirmed": false
+}

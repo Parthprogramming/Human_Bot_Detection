@@ -44,6 +44,22 @@ const Sign_In = () => {
 
   const navigate = useNavigate();
 
+  // 🔄 Initialize behavioral tracking reset for sign-in page
+  useEffect(() => {
+    console.log('🚀 SIGN-IN page mounted - checking behavioral tracker state');
+    
+    // Force refresh behavioral data for new page visit
+    if (window.globalBehavioralTrackerInstance) {
+      console.log('🔄 Triggering behavioral reset for sign-in page load');
+      window.globalBehavioralTrackerInstance.handleUrlChange(
+        'component_mount', 
+        window.location.href
+      );
+    }
+    
+    console.log('✅ SIGN-IN page initialized with fresh behavioral tracking');
+  }, []);
+
   const AuthUser = (e) => {
     navigate('/auth-user');
   };

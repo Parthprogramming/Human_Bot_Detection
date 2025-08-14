@@ -40,6 +40,7 @@ class GlobalBehavioralTracker {
       baselineCollectionStartTime: null,
       baselineCollectionDuration: 20000, // 20 seconds baseline collection
       baselineCompleted: false,
+      continuousTransmissionStarted: false, // 🚨 PREVENT DOUBLE TRANSMISSION START
       baselineBehaviorData: null,
       baselineTimerId: null, // 🎯 Store timer ID for persistence
       
@@ -158,8 +159,15 @@ class GlobalBehavioralTracker {
   init() {
     if (this.isInitialized) return;
     
-    // Load existing session or create new one
-    this.loadSession();
+    // 🚀 ALWAYS START WITH COMPLETELY FRESH SESSION
+    console.log('🆕 Initializing GlobalBehavioralTracker with fresh session...');
+    
+    // Clear any existing session data
+    localStorage.removeItem('behavioral_session_id');
+    localStorage.removeItem('behavioral_data');
+    
+    // Force create new session (bypassing loadSession)
+    this.createNewSession();
     
     // 🔍 COLLECT DEVICE FINGERPRINT AND EVASION SIGNALS
     this.collectDeviceFingerprint();
@@ -173,90 +181,175 @@ class GlobalBehavioralTracker {
     // Set up page unload handler
     this.setupUnloadHandler();
     
-    // 🎯 START BASELINE COLLECTION IMMEDIATELY IN BACKGROUND
-    this.startBackgroundBaselineCollection();
+    // � Set up navigation detection for URL changes
+    this.setupNavigationDetection();
+    
+    // �🎯 START BASELINE COLLECTION IMMEDIATELY IN BACKGROUND
+    // 🛑 COMMENTED OUT TO PREVENT DUPLICATE BASELINE COLLECTION
+    // this.startBackgroundBaselineCollection();
+
+    // 📊🎯 START IMMEDIATE BASELINE COLLECTION FROM URL ENTRY
+    this.startImmediateBaselineCollection();
 
     this.isInitialized = true;
   }
   
   loadSession() {
     try {
-      // Check for existing session ID
-      const existingSessionId = localStorage.getItem(this.SESSION_KEY);
-      const existingData = localStorage.getItem(this.STORAGE_KEY);
+      // 🔄 ALWAYS START FRESH SESSION ON WEBSITE LOAD
+      console.log('🔄 Starting fresh behavioral session on website load...');
       
-      // 🔄 DETECT OLD SESSION FORMAT AND FORCE NEW SESSION
-      if (existingSessionId && existingSessionId.startsWith('behavioral_')) {
-        console.log('🔄 Detected old session format, forcing new session generation...');
-        localStorage.removeItem(this.SESSION_KEY);
-        localStorage.removeItem(this.STORAGE_KEY);
-        this.createNewSession();
-        return;
-      }
+      // Clear any existing session data to ensure clean start
+      localStorage.removeItem(this.SESSION_KEY);
+      localStorage.removeItem(this.STORAGE_KEY);
       
-      if (existingSessionId && existingData) {
-        // Continue existing session
-        this.sessionId = existingSessionId;
-        const loadedData = JSON.parse(existingData);
-        
-        // 🛡️ Safely merge loaded data, ensuring all essential properties exist
-        this.behavioralData = { 
-          ...this.behavioralData, 
-          ...loadedData,
-          // Ensure critical arrays exist
-          pageHistory: loadedData.pageHistory || [],
-          cursorMovements: loadedData.cursorMovements || [],
-          cursorSpeeds: loadedData.cursorSpeeds || [],
-          keyPressTimes: loadedData.keyPressTimes || [],
-          clickTimestamps: loadedData.clickTimestamps || [],
-          scrollSpeeds: loadedData.scrollSpeeds || [],
-          // Ensure cross-page metrics exist
-          crossPageMetrics: {
-            totalPageTransitions: 0,
-            avgTimePerPage: 0,
-            totalActions: 0,
-            avgActionsPerPage: 0,
-            ...(loadedData.crossPageMetrics || {})
-          }
-        };
-        
-        this.trackingStartTime = this.behavioralData.trackingStartTime || Date.now();
-        
-        console.log('📋 Continuing existing behavioral session:', this.sessionId);
-        console.log('📊 Session state:', {
-          baselineCompleted: this.behavioralData.baselineCompleted,
-          isCollectingBaseline: this.behavioralData.isCollectingBaseline
-        });
-        
-        // 🎯 CRITICAL: Recover baseline timer if collection is in progress
-        this.recoverBaselineTimer();
-        
-        // 🚨 IMPORTANT: Don't auto-start continuous transmission on session load
-        // Only start it when explicitly triggered by baseline completion
-        
-      } else {
-        // Create new session
-        this.sessionId = this.generateSessionId();
-        this.trackingStartTime = Date.now();
-        this.behavioralData.sessionId = this.sessionId;
-        this.behavioralData.trackingStartTime = this.trackingStartTime;
-        
-        localStorage.setItem(this.SESSION_KEY, this.sessionId);
-        console.log('🆕 New behavioral session created:', this.sessionId);
-      }
+      // Force creation of new session
+      this.createNewSession();
+      
+      console.log('✅ Fresh behavioral session created:', this.sessionId);
+      
     } catch (error) {
-      console.error('Error loading session:', error);
+      console.error('Error creating fresh session:', error);
       this.createNewSession();
     }
   }
   
   createNewSession() {
+    // Generate completely new session ID
     this.sessionId = this.generateSessionId();
     this.trackingStartTime = Date.now();
-    this.behavioralData.sessionId = this.sessionId;
-    this.behavioralData.trackingStartTime = this.trackingStartTime;
+    
+    // 🔄 COMPLETELY RESET ALL BEHAVIORAL DATA
+    this.behavioralData = {
+      sessionId: this.sessionId,
+      trackingStartTime: this.trackingStartTime,
+      pageLoadTime: Date.now(),
+      
+      // Reset baseline collection state
+      isCollectingBaseline: false,
+      baselineCollectionStartTime: null,
+      baselineCollectionDuration: 20000, 
+      baselineCompleted: false,
+      continuousTransmissionStarted: false, 
+      baselineBehaviorData: null,
+      baselineTimerId: null,
+      
+      cursorMovements: [],
+      cursorSpeeds: [],
+      cursorAcceleration: [],
+      cursorJitter: [],
+      keyPressTimes: [],
+      cursorCurvature: [],
+      keyHoldTimes: [],
+      clickTimes: [],
+      scrollSpeeds: [],
+      scrollChanges: 0,
+      idleTime: 0,
+      pasteDetected: false,
+      clickTimestamps: [],
+      lastKeyPress: null,
+      lastKeyDown: {},
+      lastMouseMove: null,
+      lastClickTime: null,
+      lastScroll: 0,
+      latestSpeed: 0,
+      allSpeeds: [],
+      lastUpdateTime: 0,
+      lastScrollTime: Date.now(),
+      pasteTimestamp: null,
+      cursorEntropy: 0,
+      botFingerprintScore: null,
+      submitTime: null,
+      TabKeyCount: 0,
+      cursorAngles: [],
+      postPasteActivity: {
+        keyPresses: 0,
+        mouseMoves: 0,
+        clicks: 0,
+        timeToFirstAction: null,
+        timeToLastAction: null,
+        actionsAfterPaste: [],
+        clipboardContent: null,
+      },
+      mouseTrajectory: [],
+      keyboardPatterns: [],
+      deviceInfo: {},
+      isAutomatedBrowser: false,
+      lastActionTime: Date.now(),
+      actionCount: 0,
+      suspiciousPatterns: [],
+      botDetectionResults: null,
+      mouseJitter: [],
+      microPauses: [],
+      hesitationTimes: [],
+      lastHoverStart: null,
+      deviceFingerprint: null,
+      canvasMetrics: {
+        winding: null,
+        geometryLength: 0,
+        textLength: 0,
+      },
+      missingCanvasFingerprint: true,
+      audio_fp_entropy_low: null,
+      evasionSignals: {},
+      unusualScreenResolution: {
+        width_height: "0x0",
+        inner_width: 0,
+        device_pixel_ratio: 0,
+        is_unusual: false,
+        spoofedMismatch: false,
+        aspectRatio: 0,
+      },
+      gpuInfo: {
+        gpu_name: null,
+        vendor: null,
+        renderer: null,
+        webgl_info: null,
+        capabilities: null,
+        extensions: [],
+        driver_info: null,
+        graphics_api: null
+      },
+      gpublacklist: {
+        gpu_name_blacklisted: false,
+        gpu_name: null,
+      },
+      timingMetrics: {},
+      cursorMicroJitter: 0,
+      pathEntropy: 0,
+      accelerationVariance: 0,
+      fittsDeviationScore: 0,
+      idleResumeAngularJerk: 0,
+      thermalHoverNoise: 0,
+      hoverPositions: [],
+      currentPage: null,
+      pageHistory: [],
+      totalSessionTime: 0,
+      crossPageMetrics: {
+        totalPageTransitions: 0,
+        avgTimePerPage: 0,
+        totalActions: 0,
+        avgActionsPerPage: 0
+      }
+    };
+    
+    // Clear any existing timers
+    if (this.baselineTimerId) {
+      clearTimeout(this.baselineTimerId);
+      this.baselineTimerId = null;
+    }
+    
+    if (this.backendIntervalId) {
+      clearInterval(this.backendIntervalId);
+      this.backendIntervalId = null;
+    }
+    
+    // Save new session to localStorage
     localStorage.setItem(this.SESSION_KEY, this.sessionId);
-    console.log('🔄 Generated new professional session ID:', this.sessionId);
+    this.saveToStorage();
+    
+    console.log('🔄 Complete fresh behavioral session created:', this.sessionId);
+    console.log('🧹 All behavioral data has been reset for new session');
   }
   
   // 🔧 DEBUG: Force generate new session ID (clears old format)
@@ -338,6 +431,7 @@ class GlobalBehavioralTracker {
     }
     
     this.behavioralData.baselineCompleted = false;
+    this.behavioralData.continuousTransmissionStarted = false; // 🚨 RESET TRANSMISSION FLAG
     this.behavioralData.isCollectingBaseline = false;
     this.behavioralData.baselineCollectionStartTime = null;
     this.behavioralData.baselineTimerId = null;
@@ -347,13 +441,7 @@ class GlobalBehavioralTracker {
     return this;
   }
 
-  // 🔧 DEBUG: Force start baseline collection (even if already completed)
-  debugForceStartBaseline() {
-    console.warn('🔧 DEBUG: Force starting baseline collection...');
-    this.debugResetBaseline();
-    this.startBackgroundBaselineCollection();
-    return this;
-  }
+
 
   // 🔧 DEBUG: Check current baseline state
   debugBaselineState() {
@@ -593,6 +681,41 @@ class GlobalBehavioralTracker {
     this.addEventListener(document, 'paste', handlePaste);
     
     console.log('🎯 Global behavioral tracking started');
+  }
+  
+  // 🛑 STOP TRACKING: Remove all event listeners and clear intervals
+  stopTracking() {
+    if (!this.isTracking) return;
+    
+    console.log('🛑 Stopping behavioral tracking...');
+    
+    // Remove all event listeners
+    this.eventListeners.forEach(({ element, event, handler }) => {
+      try {
+        element.removeEventListener(event, handler);
+      } catch (error) {
+        console.warn('Warning removing event listener:', error);
+      }
+    });
+    
+    // Clear event listeners array
+    this.eventListeners = [];
+    
+    // Clear intervals
+    if (this.urlCheckInterval) {
+      clearInterval(this.urlCheckInterval);
+      this.urlCheckInterval = null;
+    }
+    
+    if (this.saveIntervalId) {
+      clearInterval(this.saveIntervalId);
+      this.saveIntervalId = null;
+    }
+    
+    // Mark as not tracking
+    this.isTracking = false;
+    
+    console.log('✅ Behavioral tracking stopped');
   }
   
   addEventListener(element, event, handler) {
@@ -1092,6 +1215,10 @@ class GlobalBehavioralTracker {
     console.log(`📄 Page tracking: ${pageName}`);
   }
   
+  getCurrentPage() {
+    return this.behavioralData.currentPage || 'unknown';
+  }
+  
   updateCrossPageMetrics() {
     // 🛡️ Ensure pageHistory exists
     if (!this.behavioralData.pageHistory) {
@@ -1421,6 +1548,306 @@ class GlobalBehavioralTracker {
 
     window.addEventListener('beforeunload', handleUnload);
     window.addEventListener('pagehide', handleUnload);
+  }
+
+  // 🌐 NAVIGATION DETECTION: Handle URL changes and manual navigation
+  setupNavigationDetection() {
+    console.log('🌐 Setting up navigation detection for URL changes...');
+    
+    // Store initial URL
+    this.currentUrl = window.location.href;
+    this.lastNavigationTime = Date.now();
+    
+    // 1️⃣ Detect popstate events (back/forward button, manual URL entry)
+    const handlePopState = (event) => {
+      console.log('🔄 POPSTATE detected - URL changed manually or via browser navigation');
+      this.handleUrlChange('popstate', window.location.href);
+    };
+    
+    // 2️⃣ Detect hash changes
+    const handleHashChange = (event) => {
+      console.log('🔄 HASHCHANGE detected - Fragment identifier changed');
+      this.handleUrlChange('hashchange', window.location.href);
+    };
+    
+    // 3️⃣ Override pushState and replaceState to detect programmatic navigation
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    
+    window.history.pushState = function(...args) {
+      originalPushState.apply(window.history, args);
+      console.log('🔄 PUSHSTATE detected - Programmatic navigation');
+      window.globalBehavioralTrackerInstance?.handleUrlChange('pushstate', window.location.href);
+    };
+    
+    window.history.replaceState = function(...args) {
+      originalReplaceState.apply(window.history, args);
+      console.log('🔄 REPLACESTATE detected - Programmatic navigation');
+      window.globalBehavioralTrackerInstance?.handleUrlChange('replacestate', window.location.href);
+    };
+    
+    // 4️⃣ Periodic URL checking (fallback for manual address bar changes)
+    this.urlCheckInterval = setInterval(() => {
+      const currentUrl = window.location.href;
+      if (currentUrl !== this.currentUrl) {
+        console.log('🔄 URL CHANGE detected via periodic check');
+        console.log(`Previous: ${this.currentUrl}`);
+        console.log(`Current: ${currentUrl}`);
+        this.handleUrlChange('manual_check', currentUrl);
+      }
+    }, 500); // Check every 500ms
+    
+    // 5️⃣ Listen for page visibility changes (when user comes back to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const currentUrl = window.location.href;
+        if (currentUrl !== this.currentUrl) {
+          console.log('🔄 URL CHANGE detected on visibility change');
+          this.handleUrlChange('visibility_change', currentUrl);
+        }
+      }
+    };
+    
+    // 6️⃣ Listen for focus events (when user clicks on browser tab)
+    const handleFocus = () => {
+      const currentUrl = window.location.href;
+      if (currentUrl !== this.currentUrl) {
+        console.log('🔄 URL CHANGE detected on focus');
+        this.handleUrlChange('focus_change', currentUrl);
+      }
+    };
+    
+    // Add event listeners
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handleHashChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
+    // Store listeners for cleanup
+    this.eventListeners.push(
+      { element: window, event: 'popstate', handler: handlePopState },
+      { element: window, event: 'hashchange', handler: handleHashChange },
+      { element: document, event: 'visibilitychange', handler: handleVisibilityChange },
+      { element: window, event: 'focus', handler: handleFocus }
+    );
+    
+    console.log('✅ Navigation detection setup complete');
+  }
+  
+  // 🔄 HANDLE URL CHANGES: Reset behavioral data when URL changes
+  handleUrlChange(changeType, newUrl) {
+    try {
+      const now = Date.now();
+      const timeSinceLastNav = now - this.lastNavigationTime;
+      
+      console.log(`🌐 URL CHANGE DETECTED:`);
+      console.log(`  Type: ${changeType}`);
+      console.log(`  Previous URL: ${this.currentUrl}`);
+      console.log(`  New URL: ${newUrl}`);
+      console.log(`  Time since last navigation: ${timeSinceLastNav}ms`);
+      
+      // 🚨 CRITICAL: Only reset if significant time has passed or it's a different page
+      const isDifferentPage = this.isDifferentPage(this.currentUrl, newUrl);
+      const isSignificantNavigation = timeSinceLastNav > 1000; // More than 1 second
+      
+      if (isDifferentPage && isSignificantNavigation) {
+        console.log('🔄 RESETTING BEHAVIORAL DATA due to page navigation');
+        this.resetBehavioralDataForNewPage(changeType, newUrl);
+      } else {
+        console.log('⏭️ Skipping reset - same page or rapid navigation');
+      }
+      
+      // Update tracking variables
+      this.currentUrl = newUrl;
+      this.lastNavigationTime = now;
+      
+    } catch (error) {
+      console.error('❌ Error handling URL change:', error);
+    }
+  }
+  
+  // 🔍 CHECK IF DIFFERENT PAGE: Determine if URL change represents a new page
+  isDifferentPage(oldUrl, newUrl) {
+    try {
+      if (!oldUrl || !newUrl) return true;
+      
+      const oldParsed = new URL(oldUrl);
+      const newParsed = new URL(newUrl);
+      
+      // Different if:
+      // 1. Different domain
+      if (oldParsed.hostname !== newParsed.hostname) return true;
+      
+      // 2. Different path (ignoring hash)
+      if (oldParsed.pathname !== newParsed.pathname) return true;
+      
+      // 3. Different search parameters
+      if (oldParsed.search !== newParsed.search) return true;
+      
+      // Same page if only hash changed
+      return false;
+      
+    } catch (error) {
+      console.error('❌ Error comparing URLs:', error);
+      return true; // Assume different page on error
+    }
+  }
+  
+  // 🔄 RESET BEHAVIORAL DATA: Start fresh tracking for new page
+  resetBehavioralDataForNewPage(navigationType, newUrl) {
+    try {
+      console.log('🔄 RESETTING BEHAVIORAL DATA FOR NEW PAGE');
+      
+      // 1️⃣ Save backend interval state before clearing
+      const wasBackendTransmissionActive = this.backendIntervalId !== null;
+      console.log(`🔍 Backend transmission was active: ${wasBackendTransmissionActive}`);
+      
+      // 2️⃣ Stop current event tracking (but preserve backend transmission)
+      this.stopTracking();
+      
+      // 3️⃣ Handle baseline timer carefully during navigation
+      // Only clear baseline timer if baseline collection is actually complete
+      if (this.baselineTimerId && this.behavioralData.baselineCompleted) {
+        console.log('🧹 Clearing completed baseline timer during navigation');
+        clearTimeout(this.baselineTimerId);
+        this.baselineTimerId = null;
+      } else if (this.baselineTimerId) {
+        console.log('⏰ Preserving active baseline timer during navigation');
+        // Keep the timer running across navigation
+      }
+      
+      // ⚠️ DO NOT clear backendIntervalId - keep it running for continuous transmission
+      
+      // 4️⃣ Clear only component-specific storage (not session data)
+      localStorage.removeItem('behavioral_data_auth_session');
+      localStorage.removeItem('behavioral_data_signin_session');
+      localStorage.removeItem('behavioral_data_signup_session');
+      localStorage.removeItem('behavioral_data_captcha_session');
+      localStorage.removeItem('behavioral_data_pattern_session');
+      localStorage.removeItem('behavioral_data_bot_analysis_session');
+      localStorage.removeItem('behavioral_data_human_behavior_session');
+      
+      // 5️⃣ Reset behavioral data arrays but keep session intact
+      const previousSessionId = this.sessionId;
+      const previousTrackingStart = this.trackingStartTime;
+      const previousTransmissionStarted = this.behavioralData.continuousTransmissionStarted; // 🚨 PRESERVE TRANSMISSION STATE
+      
+      // 🚨 PRESERVE BASELINE STATE DURING NAVIGATION
+      const previousBaselineCompleted = this.behavioralData.baselineCompleted;
+      const previousIsCollectingBaseline = this.behavioralData.isCollectingBaseline;
+      const previousBaselineStartTime = this.behavioralData.baselineCollectionStartTime;
+      const previousBaselineTimerId = this.behavioralData.baselineTimerId;
+      
+      // Reset behavioral arrays for new page
+      this.behavioralData.cursorMovements = [];
+      this.behavioralData.cursorSpeeds = [];
+      this.behavioralData.cursorAcceleration = [];
+      this.behavioralData.cursorJitter = [];
+      this.behavioralData.keyPressTimes = [];
+      this.behavioralData.keySequences = [];
+      this.behavioralData.clickTimestamps = [];
+      this.behavioralData.clickPositions = [];
+      this.behavioralData.scrollSpeeds = [];
+      this.behavioralData.scrollDirections = [];
+      this.behavioralData.pasteCount = 0;
+      this.behavioralData.actionCount = 0;
+      
+      // Keep session identity
+      this.sessionId = previousSessionId;
+      this.trackingStartTime = previousTrackingStart;
+      this.behavioralData.sessionId = previousSessionId;
+      this.behavioralData.trackingStartTime = previousTrackingStart;
+      this.behavioralData.continuousTransmissionStarted = previousTransmissionStarted; // 🚨 RESTORE TRANSMISSION STATE
+      
+      // 🚨 RESTORE BASELINE STATE DURING NAVIGATION
+      this.behavioralData.baselineCompleted = previousBaselineCompleted;
+      this.behavioralData.isCollectingBaseline = previousIsCollectingBaseline;
+      this.behavioralData.baselineCollectionStartTime = previousBaselineStartTime;
+      this.behavioralData.baselineTimerId = previousBaselineTimerId;
+      
+      // 6️⃣ Update page tracking
+      this.behavioralData.currentPage = newUrl;
+      this.behavioralData.pageLoadTime = Date.now();
+      
+      // Initialize pageHistory if it doesn't exist
+      if (!this.behavioralData.pageHistory) {
+        this.behavioralData.pageHistory = [];
+      }
+      
+      this.behavioralData.pageHistory.push({
+        url: newUrl,
+        navigationType: navigationType,
+        timestamp: Date.now(),
+        timeSpent: 0
+      });
+      
+      // 7️⃣ Restart tracking systems (but don't restart backend if it was already running)
+      this.startGlobalTracking();
+      
+      // 🚨 CRITICAL: DO NOT restart baseline collection during navigation
+      // Baseline should only start once when URL is manually entered
+      if (!this.behavioralData.baselineCompleted && !this.behavioralData.isCollectingBaseline) {
+        console.log('🎯 Starting baseline collection (first time only)');
+        this.startImmediateBaselineCollection();
+      } else {
+        console.log('✅ Baseline already running or completed - no restart needed');
+      }
+      
+      this.setupPeriodicSaving();
+      
+      // 8️⃣ Only start backend transmission if baseline collection is ACTUALLY complete
+      console.log('🔍 TRANSMISSION CHECK:');
+      console.log('  wasBackendTransmissionActive:', wasBackendTransmissionActive);
+      console.log('  baselineCompleted:', this.behavioralData.baselineCompleted);
+      console.log('  isCollectingBaseline:', this.behavioralData.isCollectingBaseline);
+      console.log('  continuousTransmissionStarted:', this.behavioralData.continuousTransmissionStarted);
+      console.log('  baselineCollectionStartTime:', this.behavioralData.baselineCollectionStartTime);
+      console.log('  currentTime:', Date.now());
+      
+      // 🎯 CRITICAL: Check if 20 seconds have actually elapsed
+      let actuallyPastBaseline = false;
+      if (this.behavioralData.baselineCollectionStartTime) {
+        const elapsed = Date.now() - this.behavioralData.baselineCollectionStartTime;
+        actuallyPastBaseline = elapsed >= 20000;
+        console.log('  Time elapsed since baseline start:', elapsed, 'ms');
+        console.log('  Has 20 seconds actually passed?', actuallyPastBaseline);
+      } else {
+        console.log('  No baseline start time found - baseline not started');
+      }
+      
+      // 🚨 CRITICAL FIX: Only start transmission if ALL conditions are met:
+      // 1. Backend transmission was not already active
+      // 2. Baseline is marked as completed
+      // 3. 20 seconds have actually elapsed since baseline started
+      // 4. Continuous transmission hasn't already started
+      if (!wasBackendTransmissionActive && 
+          this.behavioralData.baselineCompleted && 
+          actuallyPastBaseline && 
+          !this.behavioralData.continuousTransmissionStarted) {
+        console.log('🚀 Starting backend transmission for new page (baseline ACTUALLY completed)...');
+        this.startContinuousTransmission();
+      } else if (!this.behavioralData.baselineCompleted || !actuallyPastBaseline) {
+        console.log('⏳ Waiting for baseline collection to complete before starting transmission...');
+        if (!actuallyPastBaseline) {
+          const remaining = 20000 - (Date.now() - (this.behavioralData.baselineCollectionStartTime || Date.now()));
+          console.log(`⏰ ${Math.max(0, remaining / 1000).toFixed(1)} seconds remaining in baseline collection`);
+        }
+      } else if (this.behavioralData.continuousTransmissionStarted) {
+        console.log('✅ Continuous transmission already started - no action needed');
+      } else {
+        console.log('✅ Backend transmission continues uninterrupted');
+      }
+      
+      // 9️⃣ Log the reset
+      console.log('✅ BEHAVIORAL DATA RESET COMPLETE (Session Preserved)');
+      console.log(`  Session ID: ${this.sessionId} (preserved)`);
+      console.log(`  Navigation Type: ${navigationType}`);
+      console.log(`  New URL: ${newUrl}`);
+      console.log(`  Backend transmission: ${this.backendIntervalId ? 'ACTIVE' : 'INACTIVE'}`);
+      
+    } catch (error) {
+      console.error('❌ Error resetting behavioral data:', error);
+    }
   }
 
   // 🔬 COSINE SIMILARITY: Create rolling windows for behavioral analysis
@@ -1849,7 +2276,292 @@ class GlobalBehavioralTracker {
     });
   }
   
-  // 🎯 GLOBAL BACKGROUND Baseline Collection - Eagle's Eye View
+  // 🎯📊 IMMEDIATE BASELINE COLLECTION - Starts right when URL is manually entered
+  startImmediateBaselineCollection() {
+    console.log('🎯 STARTING IMMEDIATE BASELINE COLLECTION FROM URL ENTRY');
+    
+    // 🔄 ALWAYS COLLECT FRESH 20-SECOND BASELINE FOR EACH SESSION
+    // This ensures proper behavioral analysis for each visit
+    
+    // 🔄 FORCE FRESH START: Always reset baseline state for new URL entry
+    this.behavioralData.isCollectingBaseline = false;
+    this.behavioralData.baselineCompleted = false;
+    this.behavioralData.continuousTransmissionStarted = false; // 🚨 RESET TRANSMISSION FLAG
+    this.behavioralData.baselineCollectionStartTime = null;
+    this.behavioralData.baselineBehaviorData = null;
+    
+    // 🛡️ PROTECTION: Clear any existing baseline timer
+    if (this.baselineTimerId) {
+      clearTimeout(this.baselineTimerId);
+      this.baselineTimerId = null;
+    }
+    
+    // 🛡️ PROTECTION: Stop any existing continuous transmission
+    if (this.backendIntervalId) {
+      clearInterval(this.backendIntervalId);
+      this.backendIntervalId = null;
+      console.log('🛑 Stopped existing continuous transmission for fresh baseline collection');
+    }
+    
+    // Clear any previous baseline completion flag
+    localStorage.removeItem('global_baseline_completed');
+    
+    console.log('📊 IMMEDIATE BASELINE: Starting 20-second collection from URL entry...');
+    console.log('🔇 SILENT MODE: Collection runs in background without user awareness');
+    
+    // 📊 CRITICAL: Set collection state BEFORE initializing data
+    this.behavioralData.isCollectingBaseline = true;
+    this.behavioralData.baselineCollectionStartTime = Date.now();
+    this.behavioralData.baselineCompleted = false;
+    
+    // Initialize comprehensive baseline data structure
+    this.behavioralData.baselineBehaviorData = {
+      // Immediate URL entry behavior
+      urlEntryTime: Date.now(),
+      initialBrowsingBehavior: [],
+      collectionTrigger: 'url_manual_entry_immediate',
+      
+      // Mouse behavior from first interaction
+      cursorMovements: [],
+      cursorSpeeds: [],
+      cursorPaths: [],
+      hoverPatterns: [],
+      naturalMouseMovement: [],
+      
+      // Keyboard behavior from first typing
+      keyPressTimes: [],
+      keySequences: [],
+      typingRhythm: [],
+      naturalTypingPatterns: [],
+      
+      // Click behavior from first clicks
+      clickTimestamps: [],
+      clickPatterns: [],
+      doubleClickIntervals: [],
+      naturalClickBehavior: [],
+      
+      // Scroll behavior from first scrolling
+      scrollSpeeds: [],
+      scrollDirections: [],
+      scrollPatterns: [],
+      naturalScrollBehavior: [],
+      
+      // Natural browsing patterns (IRRESPECTIVE OF PAGE)
+      initialPageExploration: [],
+      naturalNavigationPatterns: [],
+      organicInteractionFlow: [],
+      crossPageBehavior: [],
+      
+      // 🦅 Page tracking arrays (MISSING - CAUSING ERROR)
+      pagesVisited: [this.behavioralData.currentPage || 'unknown'],
+      pageTransitions: [],
+      timePerPage: [],
+      navigationPatterns: [],
+      idlePeriods: [],
+      
+      // 🦅 Activity tracking
+      actionCount: 0,
+      totalActiveTime: 0,
+      lastActionTimestamp: null,
+      
+      // Baseline quality indicators
+      collectionStartTime: Date.now(),
+      collectionEndTime: null,
+      collectionTrigger: 'url_manual_entry_immediate',
+      naturalBehaviorScore: 0,
+      baselineQuality: 'collecting',
+      backgroundMode: true
+    };
+    
+    // Set EXACTLY 20-second timer for baseline completion
+    this.baselineTimerId = setTimeout(() => {
+      this.completeImmediateBaselineCollection();
+    }, 20000); // Exactly 20 seconds
+    
+    // Store timer reference for persistence across page changes
+    this.behavioralData.baselineTimerId = this.baselineTimerId;
+    
+    // Save session state
+    this.saveSession();
+    
+    console.log('✅ IMMEDIATE BASELINE: 20-second collection started from URL entry');
+    console.log(`⏰ Collection will complete at: ${new Date(Date.now() + 20000).toLocaleTimeString()}`);
+    console.log('🔄 Collection will continue even if user navigates between pages');
+    console.log('📡 CONTINUOUS TRANSMISSION: Will start automatically AFTER baseline completes');
+    
+    return 20000; // Return duration
+  }
+  
+  // 🎯📊 Complete immediate baseline collection (RUNS IRRESPECTIVE OF CURRENT PAGE)
+  completeImmediateBaselineCollection() {
+    if (!this.behavioralData.isCollectingBaseline) {
+      console.log('⚠️ Baseline already completed or not collecting');
+      return;
+    }
+    
+    console.log('✅ IMMEDIATE BASELINE: Completing 20-second collection...');
+    console.log('📍 COMPLETION: Irrespective of which page user is currently on');
+    console.log('🔇 SILENT COMPLETION: User unaware of background process');
+    console.log('📍 Current page during completion:', this.behavioralData.currentPage);
+    console.log('⏰ Baseline collection time elapsed:', Date.now() - this.behavioralData.baselineCollectionStartTime, 'ms');
+    
+    // Clean up baseline timer
+    if (this.baselineTimerId) {
+      clearTimeout(this.baselineTimerId);
+      this.baselineTimerId = null;
+    }
+    this.behavioralData.baselineTimerId = null;
+    
+    // Mark baseline as completed
+    this.behavioralData.isCollectingBaseline = false;
+    this.behavioralData.baselineCompleted = true;
+    this.behavioralData.baselineBehaviorData.collectionEndTime = Date.now();
+    this.behavioralData.baselineBehaviorData.baselineQuality = 'completed';
+    
+    // Calculate collection duration
+    const collectionDuration = this.behavioralData.baselineBehaviorData.collectionEndTime - 
+                               this.behavioralData.baselineBehaviorData.collectionStartTime;
+    
+    console.log(`⏰ IMMEDIATE BASELINE: Collection completed in ${collectionDuration/1000} seconds`);
+    console.log(`📊 Current page: ${this.behavioralData.currentPage || 'unknown'} (collection ran across all pages)`);
+    
+    // Store baseline completion timestamp in localStorage
+    localStorage.setItem('global_baseline_completed', JSON.stringify({
+      completedAt: Date.now(),
+      sessionId: this.sessionId,
+      duration: collectionDuration,
+      trigger: 'url_manual_entry_immediate',
+      completedOnPage: this.behavioralData.currentPage || 'unknown'
+    }));
+    
+    // Validate baseline data quality
+    const baselineStats = this.validateImmediateBaselineData();
+    this.behavioralData.baselineBehaviorData.naturalBehaviorScore = baselineStats.qualityScore;
+    
+    console.log(`📊 BASELINE QUALITY: Score ${baselineStats.qualityScore.toFixed(2)}, ${baselineStats.metrics.totalInteractions} total interactions`);
+    
+    // Send baseline data to backend
+    this.sendImmediateBaselineToBackend().then((result) => {
+      console.log('✅ IMMEDIATE BASELINE: Sent to backend successfully');
+      console.log('🔄 READY: System now ready for continuous behavioral analysis');
+      console.log('📡 STARTING CONTINUOUS TRANSMISSION: Now sending behavior data every 1 second');
+      
+      // Start continuous data transmission using our safety check
+      this.startContinuousTransmission();
+      
+      // Emit completion event for any listeners
+      window.dispatchEvent(new CustomEvent('immediateBaselineCompleted', {
+        detail: {
+          baselineData: this.behavioralData.baselineBehaviorData,
+          sessionId: this.sessionId,
+          collectionDuration: collectionDuration,
+          trigger: 'url_manual_entry_immediate',
+          completedOnPage: this.behavioralData.currentPage || 'unknown',
+          silentMode: true,
+          backendResult: result
+        }
+      }));
+      
+    }).catch((error) => {
+      console.error('❌ IMMEDIATE BASELINE: Backend send failed:', error);
+      console.log('🔄 STARTING CONTINUOUS TRANSMISSION: Despite baseline send error, starting behavioral analysis');
+      
+      // Start continuous transmission anyway
+      if (!this.backendIntervalId) {
+        this.startContinuousTransmission();
+        console.log('🚀 CONTINUOUS TRANSMISSION: Started despite baseline error');
+      }
+      
+      // Emit completion event with error
+      window.dispatchEvent(new CustomEvent('immediateBaselineCompleted', {
+        detail: {
+          baselineData: this.behavioralData.baselineBehaviorData,
+          sessionId: this.sessionId,
+          error: error.message,
+          trigger: 'url_manual_entry_immediate',
+          completedOnPage: this.behavioralData.currentPage || 'unknown',
+          silentMode: true
+        }
+      }));
+    });
+  }
+  
+  // 📊 Validate immediate baseline data quality
+  validateImmediateBaselineData() {
+    const data = this.behavioralData.baselineBehaviorData;
+    if (!data) {
+      return { qualityScore: 0, metrics: {} };
+    }
+    
+    const metrics = {
+      mouseMovements: data.cursorMovements?.length || 0,
+      keyPresses: data.keyPressTimes?.length || 0,
+      clicks: data.clickTimestamps?.length || 0,
+      scrollEvents: data.scrollSpeeds?.length || 0,
+      totalInteractions: 0
+    };
+    
+    metrics.totalInteractions = metrics.mouseMovements + metrics.keyPresses + 
+                               metrics.clicks + metrics.scrollEvents;
+    
+    // Calculate quality score (0-1)
+    let qualityScore = 0;
+    if (metrics.totalInteractions > 0) qualityScore += 0.3;
+    if (metrics.mouseMovements > 5) qualityScore += 0.3;
+    if (metrics.keyPresses > 0) qualityScore += 0.2;
+    if (metrics.clicks > 0) qualityScore += 0.2;
+    
+    console.log(`📊 IMMEDIATE BASELINE QUALITY: Score=${qualityScore.toFixed(2)}, Interactions=${metrics.totalInteractions}`);
+    
+    return { qualityScore, metrics };
+  }
+  
+  // 📊 Send immediate baseline to backend (TRIGGERED FROM URL ENTRY)
+  async sendImmediateBaselineToBackend() {
+    const baselineData = this.behavioralData.baselineBehaviorData;
+    if (!baselineData) {
+      throw new Error('No baseline data to send');
+    }
+    
+    console.log('📤 IMMEDIATE BASELINE: Sending to backend...');
+    console.log('📍 TRIGGER: URL manually entered in browser address bar');
+    
+    try {
+      const response = await fetch('http://127.0.0.1:8000/user/store-baseline-behavior/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          baseline_data: baselineData,
+          collection_trigger: 'url_manual_entry_immediate',
+          collection_duration: 20000,
+          baseline_type: 'immediate_url_entry_background',
+          data_quality_score: baselineData.naturalBehaviorScore || 0.5,
+          silent_collection: true,
+          background_mode: true,
+          cross_page_collection: true
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ IMMEDIATE BASELINE: Backend storage successful');
+        console.log('🔄 READY: Behavioral analysis system now ready');
+        return result;
+      } else {
+        throw new Error(result.message || 'Backend storage failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ IMMEDIATE BASELINE: Backend send error:', error);
+      throw error;
+    }
+  }
+
+  // 🎯 LEGACY: Background Baseline Collection (for backward compatibility)
   startBackgroundBaselineCollection() {
     // 🔄 FORCE FRESH START: Always reset baseline state for new page loads
     this.behavioralData.isCollectingBaseline = false;
@@ -2207,12 +2919,48 @@ class GlobalBehavioralTracker {
   }
   
   startContinuousTransmission() {
-    console.log('🔄 Starting continuous behavioral data transmission to backend...');
-    
-    // Clear any existing interval
-    if (this.backendIntervalId) {
-      clearInterval(this.backendIntervalId);
+    // 🚨 SAFETY CHECK: Prevent multiple transmission starts
+    if (this.behavioralData.continuousTransmissionStarted) {
+      console.log('🚫 CONTINUOUS TRANSMISSION ALREADY STARTED - PREVENTING DUPLICATE');
+      console.log('📍 Current page:', this.behavioralData.currentPage);
+      console.log('⏰ Baseline completed:', this.behavioralData.baselineCompleted);
+      console.log('📡 Existing interval ID:', this.backendIntervalId);
+      console.trace('🔍 Call stack for duplicate transmission attempt:');
+      return;
     }
+    
+    // 🚨 CRITICAL SAFETY CHECK: Ensure 20 seconds have actually passed
+    if (this.behavioralData.baselineCollectionStartTime) {
+      const elapsed = Date.now() - this.behavioralData.baselineCollectionStartTime;
+      if (elapsed < 20000) {
+        console.log('🚫 BLOCKED: Attempting to start transmission before 20-second baseline completes');
+        console.log(`⏰ Only ${elapsed}ms elapsed, need 20000ms (${(20000 - elapsed)/1000}s remaining)`);
+        console.log('📍 Current page:', this.behavioralData.currentPage);
+        console.trace('🔍 Call stack for premature transmission attempt:');
+        return;
+      }
+    }
+    
+    // Prevent duplicate intervals - only start if not already running
+    if (this.backendIntervalId) {
+      console.log('⚠️ Backend transmission already active, preserving existing interval');
+      console.log('📍 Current page:', this.behavioralData.currentPage);
+      console.log('📡 Existing interval ID:', this.backendIntervalId);
+      return;
+    }
+    
+    console.log('🚀 ATTEMPTING TO START CONTINUOUS TRANSMISSION');
+    console.log('📍 Current page:', this.behavioralData.currentPage);
+    console.log('⏰ Baseline completed:', this.behavioralData.baselineCompleted);
+    console.log('📊 Baseline collecting:', this.behavioralData.isCollectingBaseline);
+    console.trace('🔍 Call stack for transmission start:');
+    
+    // 🎯 MARK TRANSMISSION AS STARTED
+    this.behavioralData.continuousTransmissionStarted = true;
+    
+    console.log('🔄 STARTING CONTINUOUS BEHAVIORAL DATA TRANSMISSION');
+    console.log('⏰ TIMING: This starts ONLY AFTER 20-second baseline collection completes');
+    console.log('📡 FREQUENCY: Sending behavior data every 1 second to backend');
     
     // Send first batch immediately to avoid gap
     console.log('📤 Sending immediate post-baseline data...');
@@ -2231,6 +2979,16 @@ class GlobalBehavioralTracker {
       clearInterval(this.backendIntervalId);
       this.backendIntervalId = null;
       console.log('⏹️ Continuous transmission stopped');
+    }
+  }
+  
+  // 🔄 ENSURE BACKEND TRANSMISSION: Make sure backend transmission is always running
+  ensureBackendTransmission() {
+    if (!this.backendIntervalId) {
+      console.log('🔧 Backend transmission not active, starting...');
+      this.startContinuousTransmission();
+    } else {
+      console.log('✅ Backend transmission is active');
     }
   }
   
@@ -2365,6 +3123,21 @@ class GlobalBehavioralTracker {
     const baseline = this.behavioralData.baselineBehaviorData;
     const currentPage = this.behavioralData.currentPage || 'unknown';
     
+    // 🛡️ DEFENSIVE: Ensure all baseline arrays exist
+    if (!baseline.cursorMovements) baseline.cursorMovements = [];
+    if (!baseline.cursorSpeeds) baseline.cursorSpeeds = [];
+    if (!baseline.cursorPaths) baseline.cursorPaths = [];
+    if (!baseline.hoverPatterns) baseline.hoverPatterns = [];
+    if (!baseline.keyPressTimes) baseline.keyPressTimes = [];
+    if (!baseline.keySequences) baseline.keySequences = [];
+    if (!baseline.typingRhythm) baseline.typingRhythm = [];
+    if (!baseline.clickTimestamps) baseline.clickTimestamps = [];
+    if (!baseline.clickPatterns) baseline.clickPatterns = [];
+    if (!baseline.doubleClickIntervals) baseline.doubleClickIntervals = [];
+    if (!baseline.scrollSpeeds) baseline.scrollSpeeds = [];
+    if (!baseline.scrollDirections) baseline.scrollDirections = [];
+    if (!baseline.scrollPatterns) baseline.scrollPatterns = [];
+    
     switch (eventType) {
       case 'mouseMove':
         if (eventData.clientX !== undefined && eventData.clientY !== undefined) {
@@ -2475,21 +3248,39 @@ class GlobalBehavioralTracker {
     }
     
     // 🦅 Track page transitions during baseline
-    if (currentPage && !baseline.pagesVisited.includes(currentPage)) {
-      baseline.pagesVisited.push(currentPage);
+    if (currentPage) {
+      // 🛡️ DEFENSIVE: Ensure pagesVisited array exists
+      if (!baseline.pagesVisited) {
+        baseline.pagesVisited = [currentPage];
+        console.warn('🚨 Fixed missing pagesVisited array in baseline data');
+      }
       
-      if (baseline.pagesVisited.length > 1) {
-        baseline.pageTransitions.push({
-          from: baseline.pagesVisited[baseline.pagesVisited.length - 2],
-          to: currentPage,
-          timestamp: timestamp
-        });
+      if (!baseline.pagesVisited.includes(currentPage)) {
+        baseline.pagesVisited.push(currentPage);
+        
+        // 🛡️ DEFENSIVE: Ensure pageTransitions array exists
+        if (!baseline.pageTransitions) {
+          baseline.pageTransitions = [];
+        }
+        
+        if (baseline.pagesVisited.length > 1) {
+          baseline.pageTransitions.push({
+            from: baseline.pagesVisited[baseline.pagesVisited.length - 2],
+            to: currentPage,
+            timestamp: timestamp
+          });
+        }
       }
     }
     
     // 🦅 Update activity metrics
-    baseline.actionCount++;
+    baseline.actionCount = (baseline.actionCount || 0) + 1;
     baseline.totalActiveTime = timestamp - baseline.collectionStartTime;
+    
+    // 🛡️ DEFENSIVE: Ensure idlePeriods array exists
+    if (!baseline.idlePeriods) {
+      baseline.idlePeriods = [];
+    }
     
     // Track idle periods (gaps > 2 seconds)
     if (baseline.actionCount > 1) {

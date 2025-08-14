@@ -194,7 +194,7 @@ class UserBaselineBehavior(models.Model):
     """
     Model to store user baseline behavioral data collected during the initial 20-second period
     """
-    user_id = models.CharField(max_length=255, help_text="User identifier (USAI ID or username)")
+    user_id = models.CharField(max_length=255, help_text="User identifier (USAI ID or username)" )
     session_id = models.CharField(max_length=100, help_text="Session identifier for the baseline collection")
     baseline_user_behavior = models.JSONField(
         help_text="Complete baseline behavioral data collected during 20-second period"

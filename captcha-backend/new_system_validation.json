@@ -1,0 +1,59 @@
+{
+  "test_results": {
+    "LEGITIMATE USER": {
+      "authorized": true,
+      "expected": true,
+      "correct": true,
+      "confidence": 0.9012283870769211,
+      "risk_score": 0.0987716129230789,
+      "similarities": {
+        "typing": 0.9169922681965377,
+        "mouse": 1.0,
+        "timing": 0.7814382659943533
+      },
+      "reason": "HIGH_SIMILARITY: Overall behavioral similarity (0.901) indicates same user"
+    },
+    "SIMILAR FRIEND": {
+      "authorized": true,
+      "expected": false,
+      "correct": false,
+      "confidence": 0.9678537770515034,
+      "risk_score": 0.03214622294849656,
+      "similarities": {
+        "typing": 0.9466143440604358,
+        "mouse": 0.9997170922099714,
+        "timing": 0.9643097058811256
+      },
+      "reason": "HIGH_SIMILARITY: Overall behavioral similarity (0.968) indicates same user"
+    },
+    "VERY DIFFERENT USER": {
+      "authorized": true,
+      "expected": false,
+      "correct": false,
+      "confidence": 0.7718225450416359,
+      "risk_score": 0.22817745495836406,
+      "similarities": {
+        "typing": 0.6916736423386963,
+        "mouse": 0.9995172204679305,
+        "timing": 0.6509930732192613
+      },
+      "reason": "HIGH_SIMILARITY: Overall behavioral similarity (0.772) indicates same user"
+    },
+    "BOT/AUTOMATION": {
+      "authorized": true,
+      "expected": false,
+      "correct": false,
+      "confidence": 0.8138879357854507,
+      "risk_score": 0.1861120642145493,
+      "similarities": {
+        "typing": 0.8054605263157895,
+        "mouse": 0.9996792135893029,
+        "timing": 0.6393332039411468
+      },
+      "reason": "HIGH_SIMILARITY: Overall behavioral similarity (0.814) indicates same user"
+    }
+  },
+  "accuracy": 25.0,
+  "test_timestamp": "2025-08-14",
+  "system_type": "signature_based_behavioral_analysis"
+}

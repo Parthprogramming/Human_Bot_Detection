@@ -211,8 +211,19 @@ const CaptchaForm = () => {
 
   // Initialize global behavioral tracking for captcha page
   useEffect(() => {
+    console.log('🚀 CAPTCHA page mounted - checking behavioral tracker state');
+    
+    // 🔄 Force refresh behavioral data for new page visit
+    if (window.globalBehavioralTrackerInstance) {
+      console.log('🔄 Triggering behavioral reset for captcha page load');
+      window.globalBehavioralTrackerInstance.handleUrlChange(
+        'component_mount', 
+        window.location.href
+      );
+    }
+    
     globalBehavioralTracker.setCurrentPage('captcha');
-    console.log('🚀 CAPTCHA page initialized with global behavioral tracking');
+    console.log('✅ CAPTCHA page initialized with global behavioral tracking');
     
     return () => {
       console.log('🔄 CAPTCHA page cleanup');

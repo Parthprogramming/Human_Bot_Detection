@@ -119,9 +119,23 @@ const Authenticate_user = () => {
 
   const navigate = useNavigate();
 
-  const goToHttpBotPage = () => {
-    navigate('/http-bot-check');
-  };
+    const goToHttpBotPage = () => {
+      navigate('/http-bot-check');
+    };
+
+      const Pattern_Detection = () => {
+      navigate('/pattern-detection');
+    };
+
+    const Human_detection = () => {
+      navigate('/human-behavior');
+    };
+
+    const Bot_Analysis = () => {
+      navigate('/bot-analysis');
+    };
+
+
 
   const [postPasteActivity, setPostPasteActivity] = useState(savedData.postPasteActivity || {
     keyPresses: 0,
@@ -194,11 +208,22 @@ const Authenticate_user = () => {
 
   // Initialize global behavioral tracking for auth-user page
   useEffect(() => {
+    console.log('🚀 AUTH-USER page mounted - checking behavioral tracker state');
+    
+    // Force refresh behavioral data for new page visit
+    if (window.globalBehavioralTrackerInstance) {
+      console.log('🔄 Triggering behavioral reset for auth-user page load');
+      window.globalBehavioralTrackerInstance.handleUrlChange(
+        'component_mount', 
+        window.location.href
+      );
+    }
+    
     globalBehavioralTracker.setCurrentPage('auth-user');
-    console.log('🚀 Auth-user page initialized with global behavioral tracking');
+    console.log('✅ AUTH-USER page initialized with global behavioral tracking');
     
     return () => {
-      console.log('🔄 Auth-user page cleanup');
+      console.log('🔄 AUTH-USER page cleanup');
     };
   }, []);
 
@@ -2902,15 +2927,15 @@ useEffect(() => {
               </li>
               <li className="sidebar-item">
                 <i className="icon">🤖</i>
-                <span>Bot Analysis</span>
+                <button onClick={Bot_Analysis}><span>Bot Detection</span></button>
               </li>
               <li className="sidebar-item">
                 <i className="icon">👤</i>
-                <span>Human Behavior</span>
+                <button onClick={Human_detection}><span>Human Behavior</span></button>
               </li>
               <li className="sidebar-item">
                 <i className="icon">🔍</i>
-                <span>Pattern Detection</span>
+                <button onClick={Pattern_Detection}><span>Pattern Detection</span></button>
               </li>
             </ul>
           </div>
@@ -3157,19 +3182,19 @@ useEffect(() => {
                 </div>
                 <div className="behavioral-actions">
                   <button 
-                    onClick={clearBehavioralData} 
+                    
                     className="action-btn danger"
                   >
                     🧹 Clear Data
                   </button>
                   <button 
-                    onClick={() => window.location.reload()} 
+                    
                     className="action-btn secondary"
                   >
                     🔄 Test Refresh
                   </button>
                   <button 
-                    onClick={handleLogout} 
+                    
                     className="action-btn warning"
                   >
                     🚪 Logout & Clear

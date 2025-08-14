@@ -7,5 +7,8 @@ urlpatterns = [
     path('signup/', views.sign_up, name='signup'),
     path('signin/', views.sign_in, name='signin'),
     path('baseline-storage/', views.handle_baseline_storage, name='baseline_storage'),
-    path('behavioral-analysis/', views.analyze_behavioral_data, name='behavioral_analysis')
+    path('store-baseline-behavior/', views.handle_baseline_storage, name='store_baseline_behavior'),
+    path('behavioral-analysis/', views.analyze_behavioral_data, name='behavioral_analysis'),
+    
+
 ]
