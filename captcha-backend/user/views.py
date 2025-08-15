@@ -359,89 +359,24 @@ class BehavioralAnalyzer:
     """
     
     def __init__(self):
-        self.authorized_profiles = {}  # Cache for authorized user behavioral profiles
-        self.real_time_sessions = {}   # Track real-time behavioral data
+        self.authorized_profiles = {}  
+        self.real_time_sessions = {}   
     
     def apply_risk_confidence_check(self, analysis_result):
-        """
-        Apply risk vs confidence classification check to any analysis result.
-        UPDATED RULE: Respect behavioral analysis decisions for user identification
-        - If already unauthorized due to behavioral differences, DON'T override
-        - If confidence > risk_score AND no behavioral blocking: Classify as Authorized_user
-        - If risk_score > confidence: Classify as Unauthorized_user
-        """
-        confidence = analysis_result.get('confidence', 0.0)
+    
         risk_score = analysis_result.get('risk_score', 0.0)
-        current_auth = analysis_result.get('is_authorized', False)
-        auth_reason = analysis_result.get('authorization_reason', '')
-        
-        print(f"🎯 RISK VS CONFIDENCE CLASSIFICATION:")
-        print(f"   Confidence Score: {confidence:.3f}")
-        print(f"   Risk Score: {risk_score:.3f}")
-        
-        # Check if user was blocked due to behavioral analysis (different user detection)
-        behavioral_blocks = ['EXTREMELY_DIFFERENT_USER', 'EXTREME_DIFFERENCE', 'EXTREME_MULTI_FACTOR_RISK']
-        is_behavioral_block = any(block_type in auth_reason for block_type in behavioral_blocks)
-        
-        # VERY LENIENT: Only respect extreme behavioral blocks, allow confidence override for most cases
-        std_devs = analysis_result.get('standard_deviations', 0)
-        threshold = analysis_result.get('behavioral_threshold', 12.0)
-        extremely_exceeds_threshold = std_devs > threshold * 2.0  # Only block at 24σ+ (extreme automation)
-        
-        if (is_behavioral_block and not current_auth) or (extremely_exceeds_threshold and not current_auth):
-            print(f"🚨 EXTREME BEHAVIORAL BLOCK DETECTED: Respecting only extreme behavioral differences")
-            print(f"🔒 MAINTAINING: User blocked due to extreme behavioral differences - likely automation")
-            if extremely_exceeds_threshold:
-                print(f"📊 EXTREME THRESHOLD EXCEEDED: {std_devs:.2f}σ > {threshold * 2.0:.1f}σ - blocking likely automation")
-            return analysis_result
-        
-        # SMART CONFIDENCE OVERRIDE: Only override for legitimate high-confidence cases
-        # Respect contextual decisions first, then apply selective confidence override
-        
-        current_auth = analysis_result.get('is_authorized', False)
-        auth_reason = analysis_result.get('authorization_reason', '')
-        
-        # Don't override explicit blocks from contextual analysis
-        if not current_auth and any(block_reason in auth_reason for block_reason in [
-            'LOW_CONSISTENCY_BLOCK', 'EXTREME_BEHAVIOR_BLOCK', 'COMPREHENSIVE_BLOCK'
-        ]):
-            print(f"🚨 RESPECTING CONTEXTUAL BLOCK: {auth_reason}")
-            print(f"🔒 MAINTAINING: Contextual analysis block decision")
-            return analysis_result
-        
-        # Only apply confidence override for borderline cases or basic threshold decisions
-        if confidence >= risk_score * 0.9 and current_auth:  # More conservative: 90% threshold for already authorized
-            print(f"✅ SMART AUTHORIZATION: Confidence ({confidence:.3f}) ≥ 90% of Risk ({risk_score:.3f}) - Supporting contextual decision")
-            analysis_result['authorization_reason'] = f'CONFIDENCE_SUPPORTED_DECISION: Confidence score ({confidence:.3f}) supports contextual authorization - Real-world user behavior'
-            analysis_result['recommendation'] = f'ALLOW: Confidence supports contextual decision - Legitimate user behavior'
-            print(f"✅ SMART OVERRIDE: Supporting existing authorization with confidence validation")
-            
-        elif confidence >= risk_score * 1.2 and not current_auth and 'WITHIN_THRESHOLD' in auth_reason:  # Only override basic threshold for very high confidence
-            print(f"✅ HIGH CONFIDENCE OVERRIDE: Very high confidence ({confidence:.3f}) vs risk ({risk_score:.3f}) - Overriding basic threshold")
-            analysis_result['is_authorized'] = True
-            analysis_result['authorization_reason'] = f'HIGH_CONFIDENCE_OVERRIDE: Very high confidence ({confidence:.3f}) overrides basic threshold decision'
-            analysis_result['recommendation'] = f'ALLOW: High confidence override for legitimate user behavior'
-            print(f"✅ HIGH CONFIDENCE OVERRIDE: Authorization set to True due to very high confidence")
-            
-        elif risk_score > confidence * 1.1:  # Only block if risk significantly exceeds confidence
-            print(f"🚨 RISK EXCEEDS CONFIDENCE: Risk ({risk_score:.3f}) > Confidence ({confidence:.3f}) * 1.1 - Blocking")
+        if risk_score > 3.0:
             analysis_result['is_authorized'] = False
-            analysis_result['authorization_reason'] = f'RISK_EXCEEDS_CONFIDENCE: Risk score ({risk_score:.3f}) significantly exceeds confidence score ({confidence:.3f}) - Blocking suspicious behavior'
-            analysis_result['recommendation'] = f'BLOCK: Risk score ({risk_score:.3f}) significantly higher than confidence score ({confidence:.3f})'
-            print(f"❌ RISK OVERRIDE: Authorization set to False due to high risk")
-            
+            analysis_result['authorization_reason'] = f'RISK_SCORE_BLOCK: Risk score ({risk_score:.3f}) exceeds threshold (3.0) - Blocking user'
+            analysis_result['recommendation'] = f'BLOCK: Risk score ({risk_score:.3f}) exceeds allowed threshold (3.0)'
         else:
-            # Keep contextual decision
-            print(f"⚖️ RESPECTING CONTEXTUAL DECISION: Risk ({risk_score:.3f}) vs Confidence ({confidence:.3f}) - Using contextual analysis")
-            print(f"🔄 KEEPING: Contextual authorization decision: {current_auth}")
-        
+            analysis_result['is_authorized'] = True
+            analysis_result['authorization_reason'] = f'RISK_SCORE_AUTHORIZED: Risk score ({risk_score:.3f}) within allowed threshold (≤ 3.0) - Authorizing user'
+            analysis_result['recommendation'] = f'ALLOW: Risk score ({risk_score:.3f}) within allowed threshold (≤ 3.0)'
         return analysis_result
 
     def simple_behavioral_validation(self, behavioral_data):
-        """
-        ENHANCED: Simple behavioral validation for cases where complex analysis fails
-        Focuses on detecting clear automation signals and validating basic human interaction
-        """
+        
         try:
             print(f"🔍 Performing simple behavioral validation...")
             
@@ -482,8 +417,7 @@ class BehavioralAnalyzer:
             print(f"   Paste detected: {paste_detected}")
             print(f"   Interaction rate: {interaction_rate:.2f}/sec")
             
-            # Decision logic - Updated for better user experience
-            if automation_count >= 5:  # Increased from 4 to 5 for more tolerance
+            if automation_count >= 5:  
                 return {
                     'is_authorized': False,
                     'confidence': 0.9,
