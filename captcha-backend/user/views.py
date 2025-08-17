@@ -589,7 +589,7 @@ class BehavioralAnalyzer:
             
             # ⏸️ HESITATION AND MICROPAUSE ANALYSIS
             hesitation_times = behavioral_data.get('hesitation', [])
-            micropauses = behavioral_data.get('micropause', [])
+            micropauses = behavioral_data.get('microPauses', [])
             
             if hesitation_times:
                 hesitation_durations = [item.get('duration', 0) for item in hesitation_times if isinstance(item, dict)]
@@ -1890,7 +1890,7 @@ class BehavioralAnalyzer:
             
             # ⏸️ HESITATION AND MICROPAUSE FEATURES
             hesitation_times = behavioral_data.get('hesitation', [])
-            micropauses = behavioral_data.get('micropause', [])
+            micropauses = behavioral_data.get('microPauses', [])
             
             features.extend([
                 len(hesitation_times),
@@ -2760,7 +2760,7 @@ def analyze_behavioral_data(request):
             tabkeycount=behavioral_data.get('TabKeyCount', 0),
             cursorAngleVariance=behavioral_data.get('cursorAngleVariance', 0),
             mouseJitter=behavioral_data.get('mouseJitter', []),
-            micropause=behavioral_data.get('microPauses', []),
+            micropauses=behavioral_data.get('microPauses', []),
             hesitation=behavioral_data.get('hesitationTimes', []),
             devicefingerprint=str(behavioral_data.get('deviceFingerprint', '0')),
             missing_canvas_fingerprint=behavioral_data.get('missingCanvasFingerprint', False),

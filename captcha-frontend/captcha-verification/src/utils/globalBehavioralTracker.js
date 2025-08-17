@@ -114,7 +114,7 @@ class GlobalBehavioralTracker {
       lastKeyDown: {},
       lastMouseMove: null,
       lastClickTime: null,
-      lastUpdateTime: 0,
+      lastUpdateTime: Date.now(), // ✅ Initialize with current time for micropause detection
       lastActionTime: Date.now(),
       actionCount: 0,
       
@@ -1145,6 +1145,11 @@ class GlobalBehavioralTracker {
 
     // 🛡️ Ensure arrays are initialized
     this.ensureArraysInitialized();
+    
+    // 🕰️ CRITICAL: Set lastUpdateTime BEFORE micropause detection
+    // This ensures micropause detection works properly
+    const previousLastUpdateTime = this.behavioralData.lastUpdateTime;
+    this.behavioralData.lastUpdateTime = now;
 
     // 🎯 RECORD BASELINE EVENT if collecting baseline
     if (this.behavioralData.isCollectingBaseline) {
@@ -1154,11 +1159,11 @@ class GlobalBehavioralTracker {
     // Throttle mouse tracking - but allow jitter detection
     const timeSinceLastUpdate = now - this.behavioralData.lastUpdateTime;
     let isThrottled = false;
-    
+
     if (timeSinceLastUpdate < 50) {
       isThrottled = true;
       // Still check for jitter even during throttling
-      if (this.behavioralData.lastMouseMove) {
+    if (this.behavioralData.lastMouseMove) {
         const dx = newPoint.x - this.behavioralData.lastMouseMove.x;
         const dy = newPoint.y - this.behavioralData.lastMouseMove.y;
         const dt = (timeSinceLastUpdate / 1000);
@@ -1184,14 +1189,14 @@ class GlobalBehavioralTracker {
     }
 
     // 🕰️ DETECT HESITATION PATTERNS - pauses between movements
-    // Check against lastUpdateTime for more accurate timing
-    if (this.behavioralData.lastUpdateTime) {
-      const timeSinceLastUpdate = now - this.behavioralData.lastUpdateTime;
+    // Use previousLastUpdateTime for accurate timing calculation
+    if (previousLastUpdateTime) {
+      const timeSinceLastUpdate = now - previousLastUpdateTime;
       
       console.log('🕰️ Checking for hesitation/micropause:', { 
         timeSinceLastUpdate, 
         isThrottled, 
-        lastUpdateTime: this.behavioralData.lastUpdateTime,
+        previousLastUpdateTime: previousLastUpdateTime,
         lastMouseMove: this.behavioralData.lastMouseMove 
       });
 
@@ -1221,7 +1226,7 @@ class GlobalBehavioralTracker {
         console.log('Current microPauses array:', this.behavioralData.microPauses);
       }
     } else {
-      console.log('⚠️ No lastUpdateTime available for hesitation/micropause detection');
+      console.log('⚠️ No previousLastUpdateTime available for hesitation/micropause detection');
     }
 
     // Store movement with page context
@@ -1331,7 +1336,7 @@ class GlobalBehavioralTracker {
       (this.behavioralData.timingMetrics.mouseMovementFrequency || 0) + 1;
 
     this.behavioralData.lastMouseMove = newPoint;
-    this.behavioralData.lastUpdateTime = now;
+    // ✅ lastUpdateTime already set at beginning of method for micropause detection
     this.behavioralData.actionCount++;
     this.behavioralData.lastActionTime = now;
   }
@@ -1347,6 +1352,25 @@ class GlobalBehavioralTracker {
       ...this.behavioralData.keyPressTimes.slice(-99),
       now
     ];
+    
+    // 🕰️ DETECT KEYBOARD MICROPAUSE PATTERNS
+    if (this.behavioralData.lastKeyPress) {
+      const timeSinceLastKeyPress = now - this.behavioralData.lastKeyPress;
+      
+      // Detect keyboard micropause (very short pauses 50ms - 200ms)
+      if (timeSinceLastKeyPress > 50 && timeSinceLastKeyPress < 200) {
+        console.log('✅ Keyboard micropause detected:', { duration: timeSinceLastKeyPress, timestamp: now, key: event.key });
+        console.log('Before push - microPauses length:', this.behavioralData.microPauses?.length || 0);
+        this.behavioralData.microPauses.push({
+          duration: timeSinceLastKeyPress,
+          timestamp: now,
+          beforeAction: 'keyPress',
+          key: event.key
+        });
+        console.log('After push - microPauses length:', this.behavioralData.microPauses?.length || 0);
+        console.log('Current microPauses array:', this.behavioralData.microPauses);
+      }
+    }
     
     // Update timing metrics
     this.behavioralData.timingMetrics.lastKeyPress = now;
@@ -1392,11 +1416,11 @@ class GlobalBehavioralTracker {
       this.recordBaselineEvent('click', event, now);
     }
 
-    // 🕰️ DETECT HESITATION PATTERNS before clicks
+    // 🕰️ DETECT HESITATION AND MICROPAUSE PATTERNS before clicks
     if (this.behavioralData.lastClickTime) {
       const timeSinceLastClick = now - this.behavioralData.lastClickTime;
       
-      console.log('🕰️ Checking for click hesitation:', { timeSinceLastClick, lastClickTime: this.behavioralData.lastClickTime });
+      console.log('🕰️ Checking for click hesitation and micropause:', { timeSinceLastClick, lastClickTime: this.behavioralData.lastClickTime });
 
       // Detect click hesitation (pause between 500ms - 5000ms)
       if (timeSinceLastClick > 500 && timeSinceLastClick < 5000) {
@@ -1411,8 +1435,22 @@ class GlobalBehavioralTracker {
         console.log('After push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
         console.log('Current hesitationTimes array:', this.behavioralData.hesitationTimes);
       }
+      
+      // Detect click micropause (very short pauses 50ms - 200ms)
+      if (timeSinceLastClick > 50 && timeSinceLastClick < 200) {
+        console.log('✅ Click micropause detected:', { duration: timeSinceLastClick, timestamp: now });
+        console.log('Before push - microPauses length:', this.behavioralData.microPauses?.length || 0);
+        this.behavioralData.microPauses.push({
+          duration: timeSinceLastClick,
+          timestamp: now,
+          beforeAction: 'click',
+          coordinates: { x: event.clientX, y: event.clientY }
+        });
+        console.log('After push - microPauses length:', this.behavioralData.microPauses?.length || 0);
+        console.log('Current microPauses array:', this.behavioralData.microPauses);
+      }
     } else {
-      console.log('⚠️ No lastClickTime available for click hesitation detection');
+      console.log('⚠️ No lastClickTime available for click hesitation/micropause detection');
     }
 
     this.behavioralData.clickTimestamps = [
@@ -2813,7 +2851,7 @@ class GlobalBehavioralTracker {
       lastKeyDown: {},
       lastMouseMove: null,
       lastClickTime: null,
-      lastUpdateTime: 0,
+      lastUpdateTime: Date.now(), // ✅ Initialize with current time for micropause detection
       lastActionTime: Date.now(),
       actionCount: 0,
       mouseJitter: [],
@@ -2996,7 +3034,7 @@ class GlobalBehavioralTracker {
       collectionStartTime: Date.now(),
       collectionEndTime: null,
       collectionTrigger: 'url_manual_entry_immediate',
-      
+
       // Core behavioral data (required)
       cursorMovements: [],
       cursorSpeeds: [],
@@ -3061,6 +3099,9 @@ class GlobalBehavioralTracker {
         lastMouseMove: null,
         lastClick: null
       },
+      
+      // ✅ CRITICAL: Initialize lastUpdateTime for micropause detection
+      lastUpdateTime: Date.now(),
       
       // Additional required fields
       honeypotValue: "",
@@ -3351,6 +3392,9 @@ class GlobalBehavioralTracker {
         lastMouseMove: null,
         lastClick: null
       },
+      
+      // ✅ CRITICAL: Initialize lastUpdateTime for micropause detection
+      lastUpdateTime: Date.now(),
       
       // Additional required fields
       honeypotValue: "",
