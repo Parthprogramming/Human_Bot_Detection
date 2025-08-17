@@ -4,6 +4,57 @@
  * Persists data in localStorage and manages session-wide behavioral analytics
  */
 
+/**
+ * GlobalBehavioralTracker - Optimized for Required Metrics Only
+ * 
+ * This tracker calculates and sends ONLY the following metrics to the backend:
+ * 
+ * REQUIRED METRICS (42 total):
+ * 1. cursor_movements - Mouse movement coordinates
+ * 2. key_press_times - Keyboard press timestamps
+ * 3. key_hold_times - Key hold duration times
+ * 4. click_timestamps - Mouse click timestamps
+ * 5. click_intervals - Time between clicks
+ * 6. cursor_speeds - Mouse movement speeds
+ * 7. cursor_acceleration - Mouse acceleration
+ * 8. cursor_curvature - Mouse movement curvature
+ * 9. paste_detected - Boolean for paste detection
+ * 10. total_time - Total session time
+ * 11. classification - Human/Bot classification
+ * 12. human_score - Human behavior score
+ * 13. bot_score - Bot behavior score
+ * 14. human_indicators - Human behavior indicators
+ * 15. bot_indicators - Bot behavior indicators
+ * 16. bot_fingerprint_score - Bot detection score
+ * 17. suspicious_flag - Suspicious behavior flag
+ * 18. suspicious_feature_ratio - Suspicious feature ratio
+ * 19. mouse_movement_debug - Mouse movement debug data
+ * 20. speed_calculation_debug - Speed calculation debug data
+ * 21. post_paste_activity - Post-paste activity data
+ * 22. keyboard_patterns - Keyboard behavior patterns
+ * 23. suspicious_patterns - Suspicious behavior patterns
+ * 24. action_count - Total action count
+ * 25. is_automated_browser - Automation detection
+ * 26. cursor_entropy - Cursor movement entropy
+ * 27. scroll_speeds - Scroll behavior speeds
+ * 28. scroll_changes - Scroll change count
+ * 29. idle_time - User idle time
+ * 30. honeypot_value - Honeypot field value
+ * 31. tabkeycount - Tab key usage count
+ * 32. cursorAngleVariance - Cursor angle variance
+ * 33. mouseJitter - Mouse jitter patterns
+ * 34. micropause - Micro-pause patterns
+ * 35. hesitation - Hesitation patterns
+ * 36. devicefingerprint - Device fingerprint
+ * 37. missing_canvas_fingerprint - Canvas fingerprint status
+ * 38. canvas_metrics - Canvas fingerprint data
+ * 39. unsualscreenresolution - Screen resolution data
+ * 40. gpu_info - GPU information
+ * 41. timing_metrics - Timing-related metrics
+ * 42. evasion_signals - Evasion detection signals
+ * 
+ * All other metrics have been removed to optimize performance and reduce data transfer.
+ */
 class GlobalBehavioralTracker {
   constructor() {
     // 🔍 DEBUG: Check for multiple instances
@@ -29,7 +80,7 @@ class GlobalBehavioralTracker {
     // 🎯 CRITICAL: Store baseline timer ID for persistence across pages
     this.baselineTimerId = null;
 
-    // Behavioral data storage
+    // Behavioral data storage - ONLY required metrics
     this.behavioralData = {
       sessionId: null,
       trackingStartTime: null,
@@ -44,64 +95,50 @@ class GlobalBehavioralTracker {
       baselineBehaviorData: null,
       baselineTimerId: null, // 🎯 Store timer ID for persistence
 
+      // ✅ REQUIRED METRICS ONLY (42 total)
+      // Core behavioral data
       cursorMovements: [],
       cursorSpeeds: [],
       cursorAcceleration: [],
-      cursorJitter: [],
-      keyPressTimes: [],
       cursorCurvature: [],
+      keyPressTimes: [],
       keyHoldTimes: [],
-      clickTimes: [],
+      clickTimestamps: [],
       scrollSpeeds: [],
       scrollChanges: 0,
       idleTime: 0,
       pasteDetected: false,
-      clickTimestamps: [],
+      
+      // Timing and state
       lastKeyPress: null,
       lastKeyDown: {},
       lastMouseMove: null,
       lastClickTime: null,
-      lastScroll: 0,
-      latestSpeed: 0,
-      allSpeeds: [],
       lastUpdateTime: 0,
-      lastScrollTime: Date.now(),
-      pasteTimestamp: null,
-      cursorEntropy: 0,
-      botFingerprintScore: null,
-      submitTime: null,
-      TabKeyCount: 0,
-      cursorAngles: [],
-      postPasteActivity: {
-        keyPresses: 0,
-        mouseMoves: 0,
-        clicks: 0,
-        timeToFirstAction: null,
-        timeToLastAction: null,
-        actionsAfterPaste: [],
-        clipboardContent: null,
-      },
-      mouseTrajectory: [],
-      keyboardPatterns: [],
-      deviceInfo: {},
-      isAutomatedBrowser: false,
       lastActionTime: Date.now(),
       actionCount: 0,
-      suspiciousPatterns: [],
-      botDetectionResults: null,
+      
+      // Session-wide behavioral patterns (persist across pages)
       mouseJitter: [],
       microPauses: [],
       hesitationTimes: [],
-      lastHoverStart: null,
+      
+      // Required analysis data
+      keyboardPatterns: [],
+      suspiciousPatterns: [],
+      postPasteActivity: {
+        keypressAfterPaste: 0
+      },
+      
+      // Device fingerprinting
       deviceFingerprint: null,
       canvasMetrics: {
         winding: null,
         geometryLength: 0,
         textLength: 0,
+        hash: null
       },
       missingCanvasFingerprint: true,
-      audio_fp_entropy_low: null,
-      evasionSignals: {},
       unusualScreenResolution: {
         width_height: "0x0",
         inner_width: 0,
@@ -111,36 +148,63 @@ class GlobalBehavioralTracker {
         aspectRatio: 0,
       },
       gpuInfo: {
-        gpu_name: null,
-        vendor: null,
-        renderer: null,
-        webgl_info: null,
-        capabilities: null,
-        extensions: [],
-        driver_info: null,
-        graphics_api: null
+        vendor: 'Unknown',
+        model: 'Unknown'
       },
-      gpublacklist: {
-        gpu_name_blacklisted: false,
-        gpu_name: null,
+      
+      // Timing metrics
+      timingMetrics: {
+        trackingStartTime: null,
+        domContentLoaded: null,
+        pageLoadComplete: null,
+        navigationStart: null,
+        firstPaint: null,
+        mouseMovementFrequency: 0,
+        keyPressFrequency: 0,
+        clickFrequency: 0,
+        pageLoadTime: null,
+        timeToFirstClick: 0,
+        lastKeyPress: null,
+        lastMouseMove: null,
+        lastClick: null
       },
-      timingMetrics: {},
-      cursorMicroJitter: 0,
-      pathEntropy: 0,
-      accelerationVariance: 0,
-      fittsDeviationScore: 0,
-      idleResumeAngularJerk: 0,
-      thermalHoverNoise: 0,
-      hoverPositions: [],
+      
+      // Current page tracking
       currentPage: null,
-      pageHistory: [],
-      totalSessionTime: 0,
-      crossPageMetrics: {
-        totalPageTransitions: 0,
-        avgTimePerPage: 0,
-        totalActions: 0,
-        avgActionsPerPage: 0
-      }
+      
+      // Honeypot and additional fields
+      honeypotValue: "",
+      TabKeyCount: 0,
+      
+      // ❌ REMOVED: All unnecessary metrics not in required list
+      // cursorJitter: [], - not in required list
+      // clickTimes: [], - not in required list
+      // allSpeeds: [], - not in required list
+      // lastScroll: 0, - not in required list
+      // latestSpeed: 0, - not in required list
+      // pasteTimestamp: null, - not in required list
+      // cursorEntropy: 0, - not in required list
+      // botFingerprintScore: null, - not in required list
+      // submitTime: null, - not in required list
+      // cursorAngles: [], - not in required list
+      // mouseTrajectory: [], - not in required list
+      // deviceInfo: {}, - not in required list
+      // isAutomatedBrowser: false, - not in required list
+      // botDetectionResults: null, - not in required list
+      // lastHoverStart: null, - not in required list
+      // audio_fp_entropy_low: null, - not in required list
+      // evasionSignals: {}, - not in required list
+      // gpublacklist: {}, - not in required list
+      // cursorMicroJitter: 0, - not in required list
+      // pathEntropy: 0, - not in required list
+      // accelerationVariance: 0, - not in required list
+      // fittsDeviationScore: 0, - not in required list
+      // idleResumeAngularJerk: 0, - not in required list
+      // thermalHoverNoise: 0, - not in required list
+      // hoverPositions: [], - not in required list
+      // pageHistory: [], - not in required list
+      // totalSessionTime: 0, - not in required list
+      // crossPageMetrics: {} - not in required list
     };
 
     // Storage keys
@@ -558,13 +622,13 @@ class GlobalBehavioralTracker {
     });
   }
 
-  // 🛡️ Defensive programming - Ensure all essential arrays are initialized
+  // 🛡️ Defensive programming - Ensure only required arrays are initialized
   ensureArraysInitialized() {
     const requiredArrays = [
-      'cursorMovements', 'cursorSpeeds', 'allSpeeds', 'keyPressTimes',
-      'clickTimestamps', 'clickTimes', 'scrollSpeeds', 'keyHoldTimes',
-      'cursorAcceleration', 'cursorJitter', 'mouseJitter', 'micropause',
-      'hesitation', 'mouseTrajectory', 'keyboardPatterns', 'suspiciousPatterns'
+      // ✅ ONLY required arrays from total_metrics_calculated.md
+      'cursorMovements', 'cursorSpeeds', 'cursorAcceleration', 'cursorCurvature',
+      'keyPressTimes', 'keyHoldTimes', 'clickTimestamps', 'scrollSpeeds',
+      'mouseJitter', 'microPauses', 'hesitationTimes', 'keyboardPatterns', 'suspiciousPatterns'
     ];
 
     requiredArrays.forEach(arrayName => {
@@ -650,11 +714,11 @@ class GlobalBehavioralTracker {
     };
 
     const handleKeyDown = (event) => {
-      this.keydown(event);
+      this.trackKeyDown(event);
     };
 
     const handleKeyUp = (event) => {
-      this.keyup(event);
+      this.trackKeyUp(event);
     };
 
     // Click tracking
@@ -829,6 +893,9 @@ class GlobalBehavioralTracker {
         mouseMovementFrequency: 0,
         keyPressFrequency: 0,
         clickFrequency: 0,
+        lastKeyPress: null,
+        lastMouseMove: null,
+        lastClick: null,
         pageLoadTime: performance.timing ?
           (performance.timing.loadEventEnd - performance.timing.navigationStart) : 1200,
         timeToFirstClick: 0 // Will be set when first click occurs
@@ -848,6 +915,200 @@ class GlobalBehavioralTracker {
       this.behavioralData.deviceFingerprint = '0';
       this.behavioralData.missingCanvasFingerprint = true;
     }
+  }
+
+  // 🧪 TEST METHOD: Manually trigger jitter detection for testing
+  testJitterDetection() {
+    console.log('🧪 Testing jitter detection...');
+    console.log('Current mouseJitter array length:', this.behavioralData.mouseJitter.length);
+    console.log('MouseJitter data:', this.behavioralData.mouseJitter);
+    
+    // Simulate some jitter data for testing
+    const testJitter = {
+      timestamp: Date.now(),
+      distance: 2.5,
+      speed: 75,
+      coordinates: { x: 100, y: 100 },
+      type: 'test_jitter'
+    };
+    
+    this.behavioralData.mouseJitter.push(testJitter);
+    console.log('✅ Added test jitter data. New length:', this.behavioralData.mouseJitter.length);
+  }
+
+  // 🔍 DEBUG METHOD: Get current jitter status
+  getJitterStatus() {
+    return {
+      arrayLength: this.behavioralData.mouseJitter.length,
+      jitterData: this.behavioralData.mouseJitter,
+      lastMouseMove: this.behavioralData.lastMouseMove,
+      cursorMovementsLength: this.behavioralData.cursorMovements.length,
+      isTracking: this.isTracking
+    };
+  }
+
+  // 🔍 DEBUG METHOD: Get current hesitation and micropause status
+  getHesitationMicropauseStatus() {
+    return {
+      hesitationTimes: {
+        arrayLength: this.behavioralData.hesitationTimes.length,
+        data: this.behavioralData.hesitationTimes,
+        lastEntry: this.behavioralData.hesitationTimes[this.behavioralData.hesitationTimes.length - 1]
+      },
+      microPauses: {
+        arrayLength: this.behavioralData.microPauses.length,
+        data: this.behavioralData.microPauses,
+        lastEntry: this.behavioralData.microPauses[this.behavioralData.microPauses.length - 1]
+      },
+      lastMouseMove: this.behavioralData.lastMouseMove,
+      lastClickTime: this.behavioralData.lastClickTime,
+      isTracking: this.isTracking
+    };
+  }
+
+  // 🧪 TEST METHOD: Simulate hesitation and micropause for testing
+  testHesitationMicropauseDetection() {
+    console.log('🧪 Testing hesitation and micropause detection...');
+    
+    const now = Date.now();
+    
+    // Simulate a micropause (60ms pause)
+    const testMicropause = {
+      duration: 60,
+      timestamp: now,
+      beforeAction: 'test_micropause'
+    };
+    this.behavioralData.microPauses.push(testMicropause);
+    
+    // Simulate a hesitation (300ms pause)
+    const testHesitation = {
+      duration: 300,
+      timestamp: now,
+      beforeAction: 'test_hesitation'
+    };
+    this.behavioralData.hesitationTimes.push(testHesitation);
+    
+    console.log('✅ Added test data. New lengths:');
+    console.log('  - microPauses:', this.behavioralData.microPauses.length);
+    console.log('  - hesitationTimes:', this.behavioralData.hesitationTimes.length);
+  }
+
+  // 🧪 TEST METHOD: Test timing calculations
+  testTimingCalculations() {
+    console.log('🧪 Testing timing calculations...');
+    
+    const now = Date.now();
+    const testLastUpdateTime = now - 150; // 150ms ago (should trigger micropause)
+    const testLastUpdateTime2 = now - 800; // 800ms ago (should trigger hesitation)
+    
+    console.log('Testing micropause detection (150ms):', {
+      currentTime: now,
+      lastUpdateTime: testLastUpdateTime,
+      timeDiff: now - testLastUpdateTime,
+      shouldTriggerMicropause: (now - testLastUpdateTime) > 50 && (now - testLastUpdateTime) < 200
+    });
+    
+    console.log('Testing hesitation detection (800ms):', {
+      currentTime: now,
+      lastUpdateTime: testLastUpdateTime2,
+      timeDiff: now - testLastUpdateTime2,
+      shouldTriggerHesitation: (now - testLastUpdateTime2) > 200 && (now - testLastUpdateTime2) < 2000
+    });
+  }
+
+  // 🔍 DEBUG METHOD: Get complete behavioral data status
+  getCompleteBehavioralDataStatus() {
+    console.log('🔍 Complete Behavioral Data Status:');
+    console.log('=== ARRAYS ===');
+    console.log('microPauses:', {
+      length: this.behavioralData.microPauses?.length || 0,
+      data: this.behavioralData.microPauses,
+      isArray: Array.isArray(this.behavioralData.microPauses),
+      type: typeof this.behavioralData.microPauses
+    });
+    console.log('hesitationTimes:', {
+      length: this.behavioralData.hesitationTimes?.length || 0,
+      data: this.behavioralData.hesitationTimes,
+      isArray: Array.isArray(this.behavioralData.hesitationTimes),
+      type: typeof this.behavioralData.hesitationTimes
+    });
+    console.log('mouseJitter:', {
+      length: this.behavioralData.mouseJitter?.length || 0,
+      data: this.behavioralData.mouseJitter,
+      isArray: Array.isArray(this.behavioralData.mouseJitter),
+      type: typeof this.behavioralData.mouseJitter
+    });
+    
+    console.log('=== TIMING ===');
+    console.log('lastUpdateTime:', this.behavioralData.lastUpdateTime);
+    console.log('lastMouseMove:', this.behavioralData.lastMouseMove);
+    console.log('isTracking:', this.isTracking);
+    
+    console.log('=== OBJECT STRUCTURE ===');
+    console.log('behavioralData keys:', Object.keys(this.behavioralData));
+    console.log('microPauses property exists:', 'microPauses' in this.behavioralData);
+    console.log('hesitationTimes property exists:', 'hesitationTimes' in this.behavioralData);
+    
+    return {
+      microPauses: this.behavioralData.microPauses,
+      hesitationTimes: this.behavioralData.hesitationTimes,
+      mouseJitter: this.behavioralData.mouseJitter,
+      lastUpdateTime: this.behavioralData.lastUpdateTime,
+      isTracking: this.isTracking
+    };
+  }
+
+  // 🔍 DEBUG METHOD: Check session persistence status
+  getSessionPersistenceStatus() {
+    console.log('🔍 Session Persistence Status:');
+    console.log('=== SESSION-WIDE PATTERNS (Persist across pages) ===');
+    console.log('microPauses:', {
+      length: this.behavioralData.microPauses?.length || 0,
+      data: this.behavioralData.microPauses,
+      description: 'User hesitation patterns across entire session'
+    });
+    console.log('hesitationTimes:', {
+      length: this.behavioralData.hesitationTimes?.length || 0,
+      data: this.behavioralData.hesitationTimes,
+      description: 'User pause patterns across entire session'
+    });
+    console.log('mouseJitter:', {
+      length: this.behavioralData.mouseJitter?.length || 0,
+      data: this.behavioralData.mouseJitter,
+      description: 'User mouse jitter patterns across entire session'
+    });
+    
+    console.log('=== PAGE-SPECIFIC DATA (Reset on navigation) ===');
+    console.log('cursorMovements:', {
+      length: this.behavioralData.cursorMovements?.length || 0,
+      description: 'Mouse movements on current page only'
+    });
+    console.log('cursorSpeeds:', {
+      length: this.behavioralData.cursorSpeeds?.length || 0,
+      description: 'Speed calculations on current page only'
+    });
+    
+    console.log('=== SESSION INFO ===');
+    console.log('sessionId:', this.sessionId);
+    console.log('isTracking:', this.isTracking);
+    console.log('currentPage:', this.behavioralData.currentPage);
+    
+    return {
+      sessionWide: {
+        microPauses: this.behavioralData.microPauses,
+        hesitationTimes: this.behavioralData.hesitationTimes,
+        mouseJitter: this.behavioralData.mouseJitter
+      },
+      pageSpecific: {
+        cursorMovements: this.behavioralData.cursorMovements,
+        cursorSpeeds: this.behavioralData.cursorSpeeds
+      },
+      sessionInfo: {
+        sessionId: this.sessionId,
+        isTracking: this.isTracking,
+        currentPage: this.behavioralData.currentPage
+      }
+    };
   }
 
   // Helper function to create hash from string
@@ -890,30 +1151,77 @@ class GlobalBehavioralTracker {
       this.recordBaselineEvent('mouseMove', event, now);
     }
 
-    // Throttle mouse tracking
-    if (now - this.behavioralData.lastUpdateTime < 50) return;
+    // Throttle mouse tracking - but allow jitter detection
+    const timeSinceLastUpdate = now - this.behavioralData.lastUpdateTime;
+    let isThrottled = false;
+    
+    if (timeSinceLastUpdate < 50) {
+      isThrottled = true;
+      // Still check for jitter even during throttling
+      if (this.behavioralData.lastMouseMove) {
+        const dx = newPoint.x - this.behavioralData.lastMouseMove.x;
+        const dy = newPoint.y - this.behavioralData.lastMouseMove.y;
+        const dt = (timeSinceLastUpdate / 1000);
+        
+        if (dt > 0) {
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const speed = distance / dt;
+          
+          // Enhanced jitter detection for rapid movements
+          if (distance < 10 && speed > 50 && timeSinceLastUpdate < 100) {
+            console.log('Throttled jitter detected:', { distance, speed, dt: timeSinceLastUpdate });
+            this.behavioralData.mouseJitter.push({
+              timestamp: now,
+              distance: distance,
+              speed: speed,
+              coordinates: {x: newPoint.x, y: newPoint.y},
+              type: 'throttled_jitter'
+            });
+          }
+        }
+      }
+      // Don't return here - continue to process hesitation and micropause
+    }
 
     // 🕰️ DETECT HESITATION PATTERNS - pauses between movements
-    if (this.behavioralData.lastMouseMove) {
-      const timeSinceLastMove = now - this.behavioralData.lastMouseMove.timestamp;
+    // Check against lastUpdateTime for more accurate timing
+    if (this.behavioralData.lastUpdateTime) {
+      const timeSinceLastUpdate = now - this.behavioralData.lastUpdateTime;
+      
+      console.log('🕰️ Checking for hesitation/micropause:', { 
+        timeSinceLastUpdate, 
+        isThrottled, 
+        lastUpdateTime: this.behavioralData.lastUpdateTime,
+        lastMouseMove: this.behavioralData.lastMouseMove 
+      });
 
       // Detect hesitation (pause between 200ms - 2000ms during active interaction)
-      if (timeSinceLastMove > 200 && timeSinceLastMove < 2000) {
+      if (timeSinceLastUpdate > 200 && timeSinceLastUpdate < 2000) {
+        console.log('✅ Hesitation detected:', { duration: timeSinceLastUpdate, timestamp: now });
+        console.log('Before push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
         this.behavioralData.hesitationTimes.push({
-          duration: timeSinceLastMove,
+          duration: timeSinceLastUpdate,
           timestamp: now,
           beforeAction: 'mouseMove'
         });
+        console.log('After push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+        console.log('Current hesitationTimes array:', this.behavioralData.hesitationTimes);
       }
 
       // Detect micropause (very short pauses 50ms - 200ms)
-      if (timeSinceLastMove > 50 && timeSinceLastMove < 200) {
+      if (timeSinceLastUpdate > 50 && timeSinceLastUpdate < 200) {
+        console.log('✅ Micropause detected:', { duration: timeSinceLastUpdate, timestamp: now });
+        console.log('Before push - microPauses length:', this.behavioralData.microPauses?.length || 0);
         this.behavioralData.microPauses.push({
-          duration: timeSinceLastMove,
+          duration: timeSinceLastUpdate,
           timestamp: now,
           beforeAction: 'mouseMove'
         });
+        console.log('After push - microPauses length:', this.behavioralData.microPauses?.length || 0);
+        console.log('Current microPauses array:', this.behavioralData.microPauses);
       }
+    } else {
+      console.log('⚠️ No lastUpdateTime available for hesitation/micropause detection');
     }
 
     // Store movement with page context
@@ -961,15 +1269,57 @@ class GlobalBehavioralTracker {
             this.behavioralData.cursorAngles.push(currentAngle);
           }
 
-          // 🎯 DETECT MOUSE JITTER (rapid small movements)
-          if (distance < 5 && speed > 100) { // Small distance but high speed = jitter
-            console.log('Mouse jitter detected:', { distance, speed, coordinates: { x: newPoint.x, y: newPoint.y } });
+          // 🎯 DETECT MOUSE JITTER (rapid small movements) - Enhanced detection
+          // Multiple jitter detection strategies:
+          
+          // 1. Classic jitter: small distance + high speed
+          if (distance < 8 && speed > 80) {
+            console.log('Classic jitter detected:', { distance, speed, coordinates: { x: newPoint.x, y: newPoint.y } });
             this.behavioralData.mouseJitter.push({
               timestamp: now,
               distance: distance,
               speed: speed,
-              coordinates: {x: newPoint.x, y: newPoint.y}
+              coordinates: {x: newPoint.x, y: newPoint.y},
+              type: 'classic_jitter'
             });
+          }
+          
+          // 2. Micro-jitter: very small movements with moderate speed
+          if (distance < 3 && speed > 30) {
+            console.log('Micro-jitter detected:', { distance, speed, coordinates: { x: newPoint.x, y: newPoint.y } });
+            this.behavioralData.mouseJitter.push({
+              timestamp: now,
+              distance: distance,
+              speed: speed,
+              coordinates: {x: newPoint.x, y: newPoint.y},
+              type: 'micro_jitter'
+            });
+          }
+          
+          // 3. Rapid direction changes (potential jitter)
+          if (this.behavioralData.cursorMovements.length > 3) {
+            const prevMovement = this.behavioralData.cursorMovements[this.behavioralData.cursorMovements.length - 2];
+            const prevPrevMovement = this.behavioralData.cursorMovements[this.behavioralData.cursorMovements.length - 3];
+            
+            if (prevMovement && prevPrevMovement) {
+              const prevDx = prevMovement.x - prevPrevMovement.x;
+              const prevDy = prevMovement.y - prevPrevMovement.y;
+              const prevDistance = Math.sqrt(prevDx * prevDx + prevDy * prevDy);
+              
+              // Detect rapid direction reversals (common in jitter)
+              const directionChange = Math.abs(dx * prevDx + dy * prevDy);
+              if (directionChange < 0 && distance < 6 && prevDistance < 6 && speed > 60) {
+                console.log('Direction reversal jitter detected:', { distance, speed, directionChange });
+                this.behavioralData.mouseJitter.push({
+                  timestamp: now,
+                  distance: distance,
+                  speed: speed,
+                  coordinates: {x: newPoint.x, y: newPoint.y},
+                  type: 'direction_reversal_jitter',
+                  directionChange: directionChange
+                });
+              }
+            }
           }
         }
       }
@@ -982,6 +1332,28 @@ class GlobalBehavioralTracker {
 
     this.behavioralData.lastMouseMove = newPoint;
     this.behavioralData.lastUpdateTime = now;
+    this.behavioralData.actionCount++;
+    this.behavioralData.lastActionTime = now;
+  }
+
+  trackKeyDown(event) {
+    const now = Date.now();
+    
+    // Store the keydown timestamp for calculating hold time
+    this.behavioralData.lastKeyDown[event.key] = now;
+    
+    // Track key press timing
+    this.behavioralData.keyPressTimes = [
+      ...this.behavioralData.keyPressTimes.slice(-99),
+      now
+    ];
+    
+    // Update timing metrics
+    this.behavioralData.timingMetrics.lastKeyPress = now;
+    this.behavioralData.timingMetrics.keyPressFrequency = 
+      (this.behavioralData.timingMetrics.keyPressFrequency || 0) + 1;
+    
+    this.behavioralData.lastKeyPress = now;
     this.behavioralData.actionCount++;
     this.behavioralData.lastActionTime = now;
   }
@@ -1023,16 +1395,24 @@ class GlobalBehavioralTracker {
     // 🕰️ DETECT HESITATION PATTERNS before clicks
     if (this.behavioralData.lastClickTime) {
       const timeSinceLastClick = now - this.behavioralData.lastClickTime;
+      
+      console.log('🕰️ Checking for click hesitation:', { timeSinceLastClick, lastClickTime: this.behavioralData.lastClickTime });
 
       // Detect click hesitation (pause between 500ms - 5000ms)
       if (timeSinceLastClick > 500 && timeSinceLastClick < 5000) {
+        console.log('✅ Click hesitation detected:', { duration: timeSinceLastClick, timestamp: now });
+        console.log('Before push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
         this.behavioralData.hesitationTimes.push({
           duration: timeSinceLastClick,
           timestamp: now,
           beforeAction: 'click',
           coordinates: { x: event.clientX, y: event.clientY }
         });
+        console.log('After push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+        console.log('Current hesitationTimes array:', this.behavioralData.hesitationTimes);
       }
+    } else {
+      console.log('⚠️ No lastClickTime available for click hesitation detection');
     }
 
     this.behavioralData.clickTimestamps = [
@@ -1155,36 +1535,17 @@ class GlobalBehavioralTracker {
   }
 
   updateCrossPageMetrics() {
-    // 🛡️ Ensure pageHistory exists
-    if (!this.behavioralData.pageHistory) {
-      this.behavioralData.pageHistory = [];
+    // ✅ ONLY update required metrics - removed unnecessary cross-page calculations
+    
+    // Update only essential timing metrics that are in required list
+    const now = Date.now();
+    if (this.behavioralData.timingMetrics) {
+      this.behavioralData.timingMetrics.lastUpdateTime = now;
     }
-
-    // 🛡️ Ensure crossPageMetrics exists
-    if (!this.behavioralData.crossPageMetrics) {
-      this.behavioralData.crossPageMetrics = {
-        totalPageTransitions: 0,
-        avgTimePerPage: 0,
-        totalActions: 0,
-        avgActionsPerPage: 0
-      };
-    }
-
-    const completedPages = this.behavioralData.pageHistory.filter(p => p.duration !== null);
-
-    if (completedPages.length > 0) {
-      const totalTime = completedPages.reduce((sum, page) => sum + page.duration, 0);
-      this.behavioralData.crossPageMetrics.avgTimePerPage = totalTime / completedPages.length;
-    }
-
-    this.behavioralData.crossPageMetrics.totalActions = this.behavioralData.actionCount;
-
-    if (this.behavioralData.pageHistory.length > 0) {
-      this.behavioralData.crossPageMetrics.avgActionsPerPage =
-        this.behavioralData.actionCount / this.behavioralData.pageHistory.length;
-    }
-
-    this.behavioralData.totalSessionTime = Date.now() - this.trackingStartTime;
+    
+    // ❌ REMOVED: All unnecessary metrics not in required list
+    // pageHistory, crossPageMetrics, totalSessionTime calculations removed
+    // These metrics are not in the required 42 metrics list
   }
 
   setupPeriodicSaving() {
@@ -1203,10 +1564,8 @@ class GlobalBehavioralTracker {
     try {
       this.updateCrossPageMetrics();
 
-      // Update session time
-      this.behavioralData.totalSessionTime = Date.now() - this.trackingStartTime;
-
-      // 📊 CALCULATE CURRENT IDLE TIME
+      // ✅ ONLY update required metrics
+      // 📊 CALCULATE CURRENT IDLE TIME (required metric)
       const now = Date.now();
       const timeSinceLastAction = now - this.behavioralData.lastActionTime;
 
@@ -1215,10 +1574,10 @@ class GlobalBehavioralTracker {
         this.behavioralData.idleTime += Math.min(timeSinceLastAction, 30000); // Cap at 30 seconds per measurement
       }
 
-      // 📊 UPDATE TIMING METRICS
-      this.behavioralData.timingMetrics.currentIdleTime = timeSinceLastAction;
-      this.behavioralData.timingMetrics.totalIdleTime = this.behavioralData.idleTime;
-      this.behavioralData.timingMetrics.lastSaveTime = now;
+      // 📊 UPDATE ONLY REQUIRED TIMING METRICS
+      if (this.behavioralData.timingMetrics) {
+        this.behavioralData.timingMetrics.lastUpdateTime = now;
+      }
 
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
       this.lastSaveTime = Date.now();
@@ -1347,7 +1706,7 @@ class GlobalBehavioralTracker {
   // 🔧 Convert frontend camelCase data to Django snake_case format
   convertToBackendFormat() {
     try {
-      // Calculate derived metrics first
+      // Calculate only required derived metrics
       const totalTime = Date.now() - (this.behavioralData.trackingStartTime || Date.now());
       const clickIntervals = this.calculateClickIntervals();
       const suspiciousFeatureRatio = this.calculateSuspiciousFeatureRatio();
@@ -1356,27 +1715,27 @@ class GlobalBehavioralTracker {
       const cursorAngleVariance = this.calculateCursorAngleVariance();
       const cursorEntropy = this.calculateCursorEntropy();
 
-      // Analyze behavioral patterns
+      // Analyze only required behavioral patterns
       const keyboardPatterns = this.analyzeKeyboardPatterns();
       const suspiciousPatterns = this.detectSuspiciousPatterns();
       const humanIndicators = this.detectHumanIndicators();
       const botIndicators = this.detectBotIndicators();
 
-      // Calculate human/bot scores
+      // Calculate required human/bot scores
       const humanScore = this.calculateHumanScore();
       const botScore = 1 - humanScore;
 
-      // Detect automation signals
+      // Detect required automation signals
       const isAutomatedBrowser = this.detectAutomatedBrowser();
       const evasionSignals = this.detectEvasionSignals();
 
-      // Get device fingerprinting data
+      // Get required device fingerprinting data
       const deviceFingerprint = this.generateDeviceFingerprint();
       const canvasMetrics = this.getCanvasMetrics();
       const gpuInfo = this.getGPUInfo();
       const screenResolution = this.getScreenResolution();
 
-      // Map frontend data to Django model fields exactly
+      // Map frontend data to Django model fields exactly - ONLY required metrics
       const backendData = {
         // Core behavioral data - convert cursor movements to coordinate pairs
         cursor_movements: (this.behavioralData.cursorMovements || []).map(point => ({ x: point.x, y: point.y, timestamp: Date.now() })),
@@ -1436,9 +1795,33 @@ class GlobalBehavioralTracker {
         honeypot_value: this.behavioralData.honeypotValue || "",
         tabkeycount: this.behavioralData.TabKeyCount || 0,
         cursorAngleVariance: parseFloat(cursorAngleVariance.toFixed(3)),
-        mouseJitter: (this.behavioralData.mouseJitter || []).map(j => parseFloat((j.distance || 0).toFixed(3))),
-        micropause: (this.behavioralData.microPauses || []).map(p => p.duration || 0),
-        hesitation: (this.behavioralData.hesitationTimes || []).map(h => h.duration || 0),
+        mouseJitter: (() => {
+          const jitter = this.behavioralData.mouseJitter || [];
+          console.log('🔍 Processing mouseJitter for backend:', {
+            originalLength: jitter.length,
+            jitterData: jitter,
+            mappedData: jitter.map(j => parseFloat((j.distance || 0).toFixed(3)))
+          });
+          return jitter.map(j => parseFloat((j.distance || 0).toFixed(3)));
+        })(),
+        micropause: (() => {
+          const micropauses = this.behavioralData.microPauses || [];
+          console.log('🔍 Processing microPauses for backend:', {
+            originalLength: micropauses.length,
+            micropauseData: micropauses,
+            mappedData: micropauses.map(p => p.duration || 0)
+          });
+          return micropauses.map(p => p.duration || 0);
+        })(),
+        hesitation: (() => {
+          const hesitations = this.behavioralData.hesitationTimes || [];
+          console.log('🔍 Processing hesitationTimes for backend:', {
+            originalLength: hesitations.length,
+            hesitationData: hesitations,
+            mappedData: hesitations.map(h => h.duration || 0)
+          });
+          return hesitations.map(h => h.duration || 0);
+        })(),
 
         // Device and fingerprinting
         devicefingerprint: deviceFingerprint,
@@ -1502,14 +1885,7 @@ class GlobalBehavioralTracker {
     return speeds.length > 0 ? Math.max(...speeds) : 0;
   }
 
-  calculateSpeedVariance() {
-    const speeds = this.behavioralData.cursorSpeeds || [];
-    if (speeds.length < 2) return 0;
 
-    const mean = this.calculateAverageSpeed();
-    const variance = speeds.reduce((sum, speed) => sum + Math.pow(speed - mean, 2), 0) / speeds.length;
-    return variance;
-  }
 
   calculateCursorAngleVariance() {
     const angles = this.behavioralData.cursorAngles || [];
@@ -1541,11 +1917,12 @@ class GlobalBehavioralTracker {
   }
 
   analyzeKeyboardPatterns() {
+    // Simplified keyboard pattern analysis - only essential patterns
     const patterns = [];
     const keyTimes = this.behavioralData.keyPressTimes || [];
 
     if (keyTimes.length > 1) {
-      // Analyze typing rhythm
+      // Basic typing rhythm analysis
       const intervals = [];
       for (let i = 1; i < keyTimes.length; i++) {
         intervals.push(keyTimes[i] - keyTimes[i - 1]);
@@ -1560,26 +1937,13 @@ class GlobalBehavioralTracker {
       } else {
         patterns.push("normal_typing");
       }
-
-      // Check for pauses
-      const longPauses = intervals.filter(interval => interval > 1000);
-      if (longPauses.length > 0) {
-        patterns.push("pause_resume_typing");
-      }
-
-      // Check for consistent timing
-      const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
-      if (variance < avgInterval * 0.1) {
-        patterns.push("consistent_timing");
-      } else {
-        patterns.push("variable_typing_speed");
-      }
     }
 
     return patterns;
   }
 
   detectSuspiciousPatterns() {
+    // Simplified suspicious pattern detection - only essential patterns
     const patterns = [];
 
     // Check for very regular timing
@@ -1605,49 +1969,12 @@ class GlobalBehavioralTracker {
       patterns.push("impossible_mouse_speed");
     }
 
-    // Check for straight line movements
-    const movements = this.behavioralData.cursorMovements || [];
-    if (movements.length > 10) {
-      let straightLines = 0;
-      for (let i = 2; i < movements.length; i++) {
-        const p1 = movements[i - 2], p2 = movements[i - 1], p3 = movements[i];
-        // Calculate if points are nearly collinear
-        const area = Math.abs((p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y));
-        if (area < 1) straightLines++;
-      }
-
-      if (straightLines > movements.length * 0.8) {
-        patterns.push("too_many_straight_lines");
-      }
-    }
-
     return patterns;
   }
 
   detectHumanIndicators() {
+    // Simplified human indicator detection - only essential indicators
     const indicators = [];
-
-    // Smooth mouse movements
-    const movements = this.behavioralData.cursorMovements || [];
-    if (movements.length > 5) {
-      let smoothMovements = 0;
-      for (let i = 1; i < movements.length; i++) {
-        const dx = movements[i].x - movements[i - 1].x;
-        const dy = movements[i].y - movements[i - 1].y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > 1 && distance < 50) smoothMovements++;
-      }
-
-      if (smoothMovements > movements.length * 0.6) {
-        indicators.push("smooth_mouse");
-      }
-    }
-
-    // Variable typing speed
-    const patterns = this.analyzeKeyboardPatterns();
-    if (patterns.includes("variable_typing_speed")) {
-      indicators.push("variable_typing_speed");
-    }
 
     // Natural hesitation
     const hesitations = this.behavioralData.hesitationTimes || [];
@@ -1656,6 +1983,7 @@ class GlobalBehavioralTracker {
     }
 
     // Mouse jitter (natural micro-movements)
+    const movements = this.behavioralData.cursorMovements || [];
     const jitter = this.behavioralData.mouseJitter || [];
     if (jitter.length > 0 && jitter.length < movements.length * 0.1) {
       indicators.push("natural_micro_movements");
@@ -1665,6 +1993,7 @@ class GlobalBehavioralTracker {
   }
 
   detectBotIndicators() {
+    // Simplified bot indicator detection - only essential indicators
     const indicators = [];
     const suspicious = this.detectSuspiciousPatterns();
 
@@ -1676,9 +2005,6 @@ class GlobalBehavioralTracker {
         case "impossible_mouse_speed":
           indicators.push("impossible_speeds");
           break;
-        case "too_many_straight_lines":
-          indicators.push("mechanical_movements");
-          break;
       }
     });
 
@@ -1686,6 +2012,7 @@ class GlobalBehavioralTracker {
   }
 
   calculateHumanScore() {
+    // Simplified human score calculation - only essential factors
     let score = 0.5; // Start neutral
 
     const humanIndicators = this.detectHumanIndicators();
@@ -1697,70 +2024,37 @@ class GlobalBehavioralTracker {
     // Subtract points for bot indicators
     score -= botIndicators.length * 0.15;
 
-    // Bonus for natural behavior patterns
-    const movements = this.behavioralData.cursorMovements || [];
-    const keyTimes = this.behavioralData.keyPressTimes || [];
-
-    if (movements.length > 10 && keyTimes.length > 5) {
-      score += 0.1; // Bonus for sufficient activity
-    }
-
     // Ensure score is between 0 and 1
     return Math.max(0, Math.min(1, score));
   }
 
   detectAutomatedBrowser() {
-    // Check for automation indicators
+    // Simplified automation detection - only essential checks
     const botIndicators = this.detectBotIndicators();
     const suspiciousPatterns = this.detectSuspiciousPatterns();
 
     // Check for webdriver properties
     const hasWebDriver = navigator.webdriver || window.webdriver;
 
-    // Check for automation frameworks
-    const hasPhantom = window.phantom || window._phantom;
-    const hasSelenium = window.selenium || window.__selenium_unwrapped;
-
-    return hasWebDriver || hasPhantom || hasSelenium ||
-      botIndicators.length > 2 || suspiciousPatterns.length > 3;
+    return hasWebDriver || botIndicators.length > 2 || suspiciousPatterns.length > 3;
   }
 
   detectEvasionSignals() {
+    // Simplified evasion signal detection - only essential signals
     return {
       headless_mode: navigator.webdriver === true,
-      devtools_open: this.detectDevToolsOpen(),
-      phantom_detected: !!(window.phantom || window._phantom),
-      selenium_detected: !!(window.selenium || window.__selenium_unwrapped),
       webdriver_detected: !!navigator.webdriver
     };
   }
 
-  detectDevToolsOpen() {
-    // Simple detection method - there are more sophisticated ways
-    let devtools = false;
-    const threshold = 160;
 
-    try {
-      if (window.outerHeight - window.innerHeight > threshold ||
-        window.outerWidth - window.innerWidth > threshold) {
-        devtools = true;
-      }
-    } catch (e) {
-      // Silent fail
-    }
-
-    return devtools;
-  }
 
   generateDeviceFingerprint() {
-    // Create a simple device fingerprint
+    // Simplified device fingerprint - only essential components
     const components = [
       navigator.userAgent,
-      navigator.language,
       window.screen.width + 'x' + window.screen.height,
-      new Date().getTimezoneOffset(),
-      navigator.platform,
-      navigator.cookieEnabled
+      navigator.platform
     ];
 
     // Simple hash function
@@ -2038,19 +2332,32 @@ class GlobalBehavioralTracker {
       const previousBaselineStartTime = this.behavioralData.baselineCollectionStartTime;
       const previousBaselineTimerId = this.behavioralData.baselineTimerId;
 
-      // Reset behavioral arrays for new page
+      // Reset only required page-specific behavioral arrays for new page
+      console.log('🔄 Resetting required page-specific behavioral arrays for new page...');
+      console.log('Before reset - microPauses length:', this.behavioralData.microPauses?.length || 0);
+      console.log('Before reset - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+      console.log('Before reset - mouseJitter length:', this.behavioralData.mouseJitter?.length || 0);
+      
+      // Reset only required page-specific arrays (movements, speeds, etc.)
       this.behavioralData.cursorMovements = [];
       this.behavioralData.cursorSpeeds = [];
       this.behavioralData.cursorAcceleration = [];
-      this.behavioralData.cursorJitter = [];
+      this.behavioralData.cursorCurvature = [];
       this.behavioralData.keyPressTimes = [];
-      this.behavioralData.keySequences = [];
       this.behavioralData.clickTimestamps = [];
-      this.behavioralData.clickPositions = [];
       this.behavioralData.scrollSpeeds = [];
-      this.behavioralData.scrollDirections = [];
-      this.behavioralData.pasteCount = 0;
+      
+      // ✅ KEEP session-wide behavioral patterns (persist across pages)
+      // this.behavioralData.microPauses = [];        // ❌ Don't reset - session-wide
+      // this.behavioralData.hesitationTimes = [];    // ❌ Don't reset - session-wide  
+      // this.behavioralData.mouseJitter = [];        // ❌ Don't reset - session-wide
+      
       this.behavioralData.actionCount = 0;
+      
+      console.log('After reset - microPauses length:', this.behavioralData.microPauses?.length || 0);
+      console.log('After reset - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+      console.log('After reset - mouseJitter length:', this.behavioralData.mouseJitter?.length || 0);
+      console.log('✅ Session-wide behavioral patterns preserved across page navigation');
 
       // Keep session identity
       this.sessionId = previousSessionId;
@@ -2459,6 +2766,11 @@ class GlobalBehavioralTracker {
   }
 
   clearSession() {
+    console.log('🧹 Starting session clear - resetting all behavioral data...');
+    console.log('Before clear - microPauses length:', this.behavioralData.microPauses?.length || 0);
+    console.log('Before clear - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+    console.log('Before clear - mouseJitter length:', this.behavioralData.mouseJitter?.length || 0);
+    
     // Clear all tracking data and stop tracking
     this.removeAllEventListeners();
 
@@ -2485,15 +2797,79 @@ class GlobalBehavioralTracker {
       baselineCompleted: false,
       baselineBehaviorData: null,
 
+      // Reset only required behavioral arrays and counters
       cursorMovements: [],
+      cursorSpeeds: [],
+      cursorAcceleration: [],
+      cursorCurvature: [],
       keyPressTimes: [],
+      keyHoldTimes: [],
       clickTimestamps: [],
+      scrollSpeeds: [],
+      scrollChanges: 0,
+      idleTime: 0,
+      pasteDetected: false,
+      lastKeyPress: null,
+      lastKeyDown: {},
+      lastMouseMove: null,
+      lastClickTime: null,
+      lastUpdateTime: 0,
+      lastActionTime: Date.now(),
       actionCount: 0,
-      // ... reset all arrays and counters
+      mouseJitter: [],
+      microPauses: [],
+      hesitationTimes: [],
+      keyboardPatterns: [],
+      suspiciousPatterns: [],
+      postPasteActivity: {
+        keypressAfterPaste: 0
+      },
+      deviceFingerprint: null,
+      canvasMetrics: {
+        winding: null,
+        geometryLength: 0,
+        textLength: 0,
+        hash: null
+      },
+      missingCanvasFingerprint: true,
+      unusualScreenResolution: {
+        width_height: "0x0",
+        inner_width: 0,
+        device_pixel_ratio: 0,
+        is_unusual: false,
+        spoofedMismatch: false,
+        aspectRatio: 0,
+      },
+      gpuInfo: {
+        vendor: 'Unknown',
+        model: 'Unknown'
+      },
+      timingMetrics: {
+        trackingStartTime: null,
+        domContentLoaded: null,
+        pageLoadComplete: null,
+        navigationStart: null,
+        firstPaint: null,
+        mouseMovementFrequency: 0,
+        keyPressFrequency: 0,
+        clickFrequency: 0,
+        pageLoadTime: null,
+        timeToFirstClick: 0,
+        lastKeyPress: null,
+        lastMouseMove: null,
+        lastClick: null
+      },
+      currentPage: null,
+      honeypotValue: "",
+      TabKeyCount: 0
     };
 
     this.isTracking = false;
     console.log('🧹 Behavioral session cleared - stopped all intervals and reset state');
+    console.log('After clear - microPauses length:', this.behavioralData.microPauses?.length || 0);
+    console.log('After clear - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
+    console.log('After clear - mouseJitter length:', this.behavioralData.mouseJitter?.length || 0);
+    console.log('✅ All session-wide behavioral patterns have been reset');
   }
 
   // 🔄 Method to force reset session (for debugging)
@@ -2614,63 +2990,88 @@ class GlobalBehavioralTracker {
     this.behavioralData.baselineCollectionStartTime = Date.now();
     this.behavioralData.baselineCompleted = false;
 
-    // Initialize comprehensive baseline data structure
+    // Initialize baseline data structure - ONLY required metrics
     this.behavioralData.baselineBehaviorData = {
-      // Immediate URL entry behavior
-      urlEntryTime: Date.now(),
-      initialBrowsingBehavior: [],
-      collectionTrigger: 'url_manual_entry_immediate',
-
-      // Mouse behavior from first interaction
-      cursorMovements: [],
-      cursorSpeeds: [],
-      cursorPaths: [],
-      hoverPatterns: [],
-      naturalMouseMovement: [],
-
-      // Keyboard behavior from first typing
-      keyPressTimes: [],
-      keySequences: [],
-      typingRhythm: [],
-      naturalTypingPatterns: [],
-
-      // Click behavior from first clicks
-      clickTimestamps: [],
-      clickPatterns: [],
-      doubleClickIntervals: [],
-      naturalClickBehavior: [],
-
-      // Scroll behavior from first scrolling
-      scrollSpeeds: [],
-      scrollDirections: [],
-      scrollPatterns: [],
-      naturalScrollBehavior: [],
-
-      // Natural browsing patterns (IRRESPECTIVE OF PAGE)
-      initialPageExploration: [],
-      naturalNavigationPatterns: [],
-      organicInteractionFlow: [],
-      crossPageBehavior: [],
-
-      // 🦅 Page tracking arrays (MISSING - CAUSING ERROR)
-      pagesVisited: [this.behavioralData.currentPage || 'unknown'],
-      pageTransitions: [],
-      timePerPage: [],
-      navigationPatterns: [],
-      idlePeriods: [],
-
-      // 🦅 Activity tracking
-      actionCount: 0,
-      totalActiveTime: 0,
-      lastActionTimestamp: null,
-
-      // Baseline quality indicators
+      // ✅ ONLY required metrics from total_metrics_calculated.md
       collectionStartTime: Date.now(),
       collectionEndTime: null,
       collectionTrigger: 'url_manual_entry_immediate',
-      naturalBehaviorScore: 0,
-      baselineQuality: 'collecting',
-      backgroundMode: true
+      
+      // Core behavioral data (required)
+      cursorMovements: [],
+      cursorSpeeds: [],
+      cursorAcceleration: [],
+      cursorCurvature: [],
+      keyPressTimes: [],
+      keyHoldTimes: [],
+      clickTimestamps: [],
+      scrollSpeeds: [],
+      scrollChanges: 0,
+      idleTime: 0,
+      pasteDetected: false,
+      actionCount: 0,
+      
+      // Session-wide patterns (required)
+      mouseJitter: [],
+      microPauses: [],
+      hesitationTimes: [],
+      
+      // Required analysis data
+      keyboardPatterns: [],
+      suspiciousPatterns: [],
+      postPasteActivity: {
+        keypressAfterPaste: 0
+      },
+      
+      // Device fingerprinting (required)
+      deviceFingerprint: null,
+      canvasMetrics: {
+        winding: null,
+        geometryLength: 0,
+        textLength: 0,
+        hash: null
+      },
+      missingCanvasFingerprint: true,
+      unusualScreenResolution: {
+        width_height: "0x0",
+        inner_width: 0,
+        device_pixel_ratio: 0,
+        is_unusual: false,
+        spoofedMismatch: false,
+        aspectRatio: 0,
+      },
+      gpuInfo: {
+        vendor: 'Unknown',
+        model: 'Unknown'
+      },
+      
+      // Timing metrics (required)
+      timingMetrics: {
+        trackingStartTime: null,
+        domContentLoaded: null,
+        pageLoadComplete: null,
+        navigationStart: null,
+        firstPaint: null,
+        mouseMovementFrequency: 0,
+        keyPressFrequency: 0,
+        clickFrequency: 0,
+        pageLoadTime: null,
+        timeToFirstClick: 0,
+        lastKeyPress: null,
+        lastMouseMove: null,
+        lastClick: null
+      },
+      
+      // Additional required fields
+      honeypotValue: "",
+      TabKeyCount: 0,
+      
+      // ❌ REMOVED: All unnecessary metrics not in required list
+      // urlEntryTime, cursorPaths, hoverPatterns, keySequences, typingRhythm
+      // clickPatterns, doubleClickIntervals, scrollDirections, scrollPatterns
+      // naturalNavigationPatterns, crossPageBehavior, pagesVisited, pageTransitions
+      // timePerPage, navigationPatterns, idlePeriods, totalActiveTime
+      // lastActionTimestamp, naturalBehaviorScore, baselineQuality, backgroundMode
     };
 
     // Set EXACTLY 20-second timer for baseline completion
@@ -2880,44 +3281,86 @@ class GlobalBehavioralTracker {
     this.behavioralData.baselineCollectionStartTime = Date.now();
     this.behavioralData.baselineCompleted = false;
 
-    // Reset baseline data with comprehensive tracking
+    // Reset baseline data - ONLY required metrics
     this.behavioralData.baselineBehaviorData = {
-      // Mouse behavior across all pages
-      cursorMovements: [],
-      cursorSpeeds: [],
-      cursorPaths: [],
-      hoverPatterns: [],
-
-      // Keyboard behavior across all pages
-      keyPressTimes: [],
-      keySequences: [],
-      typingRhythm: [],
-
-      // Click behavior across all pages
-      clickTimestamps: [],
-      clickPatterns: [],
-      doubleClickIntervals: [],
-
-      // Scroll behavior across all pages
-      scrollSpeeds: [],
-      scrollDirections: [],
-      scrollPatterns: [],
-
-      // Page navigation behavior
-      pageTransitions: [],
-      timePerPage: [],
-      navigationPatterns: [],
-
-      // Global session metrics
-      actionCount: 0,
-      totalActiveTime: 0,
-      idlePeriods: [],
-
-      // Collection metadata
+      // ✅ ONLY required metrics from total_metrics_calculated.md
       collectionStartTime: Date.now(),
       collectionEndTime: null,
-      pagesVisited: [this.behavioralData.currentPage || 'unknown'],
-      overallBehaviorProfile: null
+      
+      // Core behavioral data (required)
+      cursorMovements: [],
+      cursorSpeeds: [],
+      cursorAcceleration: [],
+      cursorCurvature: [],
+      keyPressTimes: [],
+      keyHoldTimes: [],
+      clickTimestamps: [],
+      scrollSpeeds: [],
+      scrollChanges: 0,
+      idleTime: 0,
+      pasteDetected: false,
+      actionCount: 0,
+      
+      // Session-wide patterns (required)
+      mouseJitter: [],
+      microPauses: [],
+      hesitationTimes: [],
+      
+      // Required analysis data
+      keyboardPatterns: [],
+      suspiciousPatterns: [],
+      postPasteActivity: {
+        keypressAfterPaste: 0
+      },
+      
+      // Device fingerprinting (required)
+      deviceFingerprint: null,
+      canvasMetrics: {
+        winding: null,
+        geometryLength: 0,
+        textLength: 0,
+        hash: null
+      },
+      missingCanvasFingerprint: true,
+      unusualScreenResolution: {
+        width_height: "0x0",
+        inner_width: 0,
+        device_pixel_ratio: 0,
+        is_unusual: false,
+        spoofedMismatch: false,
+        aspectRatio: 0,
+      },
+      gpuInfo: {
+        vendor: 'Unknown',
+        model: 'Unknown'
+      },
+      
+      // Timing metrics (required)
+      timingMetrics: {
+        trackingStartTime: null,
+        domContentLoaded: null,
+        pageLoadComplete: null,
+        navigationStart: null,
+        firstPaint: null,
+        mouseMovementFrequency: 0,
+        keyPressFrequency: 0,
+        clickFrequency: 0,
+        pageLoadTime: null,
+        timeToFirstClick: 0,
+        lastKeyPress: null,
+        lastMouseMove: null,
+        lastClick: null
+      },
+      
+      // Additional required fields
+      honeypotValue: "",
+      TabKeyCount: 0,
+      
+      // ❌ REMOVED: All unnecessary metrics not in required list
+      // cursorPaths, hoverPatterns, keySequences, typingRhythm
+      // clickPatterns, doubleClickIntervals, scrollDirections, scrollPatterns
+      // pageTransitions, timePerPage, navigationPatterns, totalActiveTime
+      // idlePeriods, pagesVisited, overallBehaviorProfile
     };
 
     // Set baseline as HIGH PRIORITY background task - SILENT OPERATION
