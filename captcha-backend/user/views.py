@@ -1100,6 +1100,7 @@ class BehavioralAnalyzer:
                 print(f"🚨 Critical error in enhanced Mahalanobis calculation: {e}")
                 logger.error(f"Enhanced Mahalanobis distance calculation error: {str(e)}")
                 return float('inf')
+<<<<<<< HEAD
             
 
     def _check_immediate_red_flags(self, current_data):
@@ -1143,6 +1144,16 @@ class BehavioralAnalyzer:
             print(f"🔬 COMPREHENSIVE BEHAVIORAL ANALYSIS: Starting multi-domain analysis...")
             print(f"🔍 Session: {session_id}")
 
+=======
+
+    
+    def analyze_with_baseline_comparison(self, session_id, current_data, baseline_behavior_or_user_id, baseline_metrics=None):
+        try:
+            print(f"🔬 ENHANCED BASELINE ANALYSIS: Starting 3-sigma Mahalanobis analysis...")
+            print(f"🔍 Session: {session_id}")
+
+            # 📊 STEP 1: RETRIEVE BASELINE FROM DATABASE
+>>>>>>> 94e632f46c91c13fdea348e461634f568aeb697c
             baseline_data = None
             user_id = None
 
@@ -1203,6 +1214,7 @@ class BehavioralAnalyzer:
                     'recommendation': 'ALLOW: Missing baseline - collecting data for future analysis'
                 }
 
+<<<<<<< HEAD
             # 🚨 CRITICAL: Check for immediate red flags (honeypot, evasion)
             immediate_red_flags = self._check_immediate_red_flags(current_data)
             if immediate_red_flags['blocked']:
@@ -1769,6 +1781,19 @@ class BehavioralAnalyzer:
                 )
                 
                 if total_interactions >= 5:
+=======
+            # Extract current features
+            current_features = self.extract_behavioral_features(current_data)
+            if not current_features:
+                print(f"⚠️ Failed to extract current behavior features - using basic validation")
+                # ENHANCED: Basic validation instead of blocking completely
+                total_interactions = (len(current_data.get('cursor_movements', [])) + 
+                                    len(current_data.get('key_press_times', [])) + 
+                                    len(current_data.get('click_timestamps', [])))
+
+                # If user has some interaction, allow with lower confidence
+                if total_interactions >= 3:
+>>>>>>> 94e632f46c91c13fdea348e461634f568aeb697c
                     return {
                         'is_authorized': True,
                         'confidence': 0.4,
@@ -1784,9 +1809,48 @@ class BehavioralAnalyzer:
                         'analysis_type': 'fallback_analysis',
                         'recommendation': 'BLOCK: Fallback rejection due to analysis error and insufficient data'
                     }
+<<<<<<< HEAD
                     
             except Exception as e:
                 print(f"Error in fallback analysis: {e}")
+=======
+
+            # Extract baseline features
+            baseline_features = self.extract_behavioral_features(baseline_data)
+            print(f"🔍 Baseline features extracted: {len(baseline_features) if baseline_features else 0} features")
+            if not baseline_features:
+                print(f"⚠️ Failed to extract baseline behavior features - using permissive comparison")
+                # ENHANCED: If baseline feature extraction fails, use basic current data validation
+                total_interactions = (len(current_data.get('cursor_movements', [])) + 
+                                    len(current_data.get('key_press_times', [])) + 
+                                    len(current_data.get('click_timestamps', [])))
+
+                if total_interactions >= 5:
+                    return {
+                        'is_authorized': True,
+                        'confidence': 0.6,
+                        'mahalanobis_distance': 0.0,
+                        'standard_deviations': 0.0,
+                        'authorization_reason': f'BASELINE_FEATURE_FALLBACK: Baseline feature extraction failed but current data shows {total_interactions} interactions',
+                        'analysis_type': 'baseline_feature_error_fallback',
+                        'recommendation': f'ALLOW: Using current interaction data ({total_interactions} interactions) for validation'
+                    }
+                else:
+                    return {
+                        'is_authorized': False,
+                        'confidence': 0.4,
+                        'mahalanobis_distance': float('inf'),
+                        'standard_deviations': float('inf'),
+                        'authorization_reason': f'INSUFFICIENT_DATA: Baseline extraction failed and only {total_interactions} current interactions',
+                        'analysis_type': 'insufficient_data_both',
+                        'recommendation': f'BLOCK: Insufficient data for validation'
+                    }
+
+            baseline_variations = self.generate_enhanced_baseline_variations(baseline_features, num_variations=15)
+
+            if len(baseline_variations) < 2:
+                print(f"❌ Insufficient baseline variations for statistical analysis")
+>>>>>>> 94e632f46c91c13fdea348e461634f568aeb697c
                 return {
                     'is_authorized': False,
                     'confidence': 0.2,
@@ -1794,6 +1858,533 @@ class BehavioralAnalyzer:
                     'analysis_type': 'critical_error',
                     'recommendation': 'BLOCK: Critical system error'
                 }
+<<<<<<< HEAD
+=======
+
+            # 🔍 STEP 4: CALCULATE MAHALANOBIS DISTANCE
+            print(f"🔍 Calculating Mahalanobis distance...")
+            mahalanobis_distance = self.calculate_enhanced_mahalanobis_distance(
+                current_features, 
+                baseline_variations
+            )
+
+            # Check if features are varying
+            if len(current_features) > 0:
+                print(f"   - Current features sum: {sum(current_features):.6f}")
+                print(f"   - Current features min/max: {min(current_features):.6f} / {max(current_features):.6f}")
+
+            if len(baseline_variations) > 0 and len(baseline_variations[0]) > 0:
+                baseline_sum = sum(sum(variation) for variation in baseline_variations)
+                print(f"   - Baseline variations total sum: {baseline_sum:.6f}")
+
+            if mahalanobis_distance == float('inf'):
+                print(f"   - ⚠️ WARNING: Mahalanobis distance is infinite!")
+            elif mahalanobis_distance == 0:
+                print(f"   - ⚠️ WARNING: Mahalanobis distance is zero!")
+            else:
+                print(f"   - ✅ Valid mahalanobis distance: {mahalanobis_distance:.6f}")
+
+                num_features = len(current_features)
+
+            # Calculate standard deviations for behavioral data
+            
+
+
+                
+                
+
+                num_features = len(current_features)
+                if num_features > 50:
+                    dimension_factor = 1.0  # High dimension = full reliability
+                elif num_features > 30:
+                    dimension_factor = 0.95  # Medium dimension = slight adjustment
+                else:
+                    dimension_factor = 0.9  # Low dimension = moderate reduction
+
+                # 4️⃣ BEHAVIORAL CONSISTENCY CHECK: Balanced consistency multiplier
+
+                consistency_factor = 1.0  # No penalty for any consistency level
+
+
+                min_std_devs = 0.05  
+                max_std_devs = 12.0  
+                standard_deviations = 0
+                original_standard_deviations = standard_deviations
+                standard_deviations = max(min_std_devs, min(standard_deviations, max_std_devs))
+                print(f"   - After bounds: max({min_std_devs}, min({original_standard_deviations}, {max_std_devs})) = {standard_deviations}")
+
+            base_threshold = 20.0  
+            behavioral_threshold = base_threshold
+            
+
+            
+
+           
+
+            safe_threshold = behavioral_threshold if behavioral_threshold and behavioral_threshold > 0 else 1e-6
+            threshold_factor = max(0, 1.0 - ((standard_deviations - behavioral_threshold) / safe_threshold))  # How close to threshold
+
+            # Default authorization decision based on sigma threshold
+            is_authorized = standard_deviations <= behavioral_threshold
+
+            # Default reasons and risk modifiers
+            threshold_reason = 'DEFAULT: Fixed behavioral threshold'
+            risk_adjustment = 1.0
+            consistency_score_susp = 1.0
+
+
+            # Calculate total interactions for validation
+            cursor_movements = len(current_data.get('cursor_movements', [])) + len(current_data.get('cursorMovements', []))
+            key_presses = len(current_data.get('key_press_times', [])) + len(current_data.get('keyPressTimes', []))
+            clicks = len(current_data.get('click_timestamps', [])) + len(current_data.get('clickTimestamps', []))
+            total_interactions = cursor_movements + key_presses + clicks
+
+           
+            if total_interactions < 2:
+                print(f"⚠️ Insufficient interaction data ({total_interactions} interactions)")
+                is_authorized = False
+                authorization_reason = f'INSUFFICIENT_DATA: Only {total_interactions} interactions detected - minimum 2 required'
+                print(f"❌ OVERRIDE: Authorization set to False due to insufficient interactions ({total_interactions})")
+
+            evasion_signals = current_data.get('evasion_signals', {})
+            unusual_patterns = sum(1 for key, value in evasion_signals.items() if value) if evasion_signals else 0
+
+            if unusual_patterns >= 5:
+                print(f"🚨 Multiple unusual behavioral patterns detected: {unusual_patterns}")
+                is_authorized = False
+                authorization_reason = f'AUTOMATION_DETECTED: {unusual_patterns} automation patterns suggest bot behavior'
+                print(f"❌ OVERRIDE: Authorization set to False due to unusual patterns ({unusual_patterns})")
+
+            # Calculate confidence based on standard deviations
+            if standard_deviations == 0:
+                confidence = 1.0
+                print(f"   - Path: standard_deviations == 0, confidence = {confidence}")
+            elif standard_deviations <= behavioral_threshold:
+                # Authorized: confidence decreases as we approach behavioral threshold
+                raw_confidence = 1.0 - (standard_deviations / safe_threshold) * 0.4
+                confidence = max(0.5, raw_confidence)
+            else:
+                # Unauthorized: confidence increases with distance beyond threshold
+                excess_deviation = standard_deviations - behavioral_threshold
+                raw_confidence = 0.6 + (excess_deviation / safe_threshold) * 0.35
+                confidence = min(0.95, raw_confidence)
+
+            # Set authorization reason if not already set
+            if 'authorization_reason' not in locals():
+                if is_authorized:
+                    if standard_deviations <= 1.0:
+                        authorization_reason = f'VERIFIED: Excellent behavioral match ({standard_deviations:.2f}σ) - Strong identity confirmation'
+                    elif standard_deviations <= 2.0:
+                        authorization_reason = f'VERIFIED: Good behavioral match ({standard_deviations:.2f}σ) - Identity confirmed'
+                    elif standard_deviations <= 3.0:
+                        authorization_reason = f'VERIFIED: Acceptable behavioral match ({standard_deviations:.2f}σ) - Identity likely confirmed'
+                    else:
+                        authorization_reason = f'VERIFIED: Within threshold ({standard_deviations:.2f}σ) - Identity marginally confirmed'
+                else:
+                    if standard_deviations <= behavioral_threshold + 1.0:
+                        authorization_reason = f'REJECTED: Behavioral mismatch beyond {behavioral_threshold:.1f}σ threshold ({standard_deviations:.2f}σ) - Identity not verified'
+                    elif standard_deviations <= behavioral_threshold + 2.0:
+                        authorization_reason = f'REJECTED: Significant behavioral difference ({standard_deviations:.2f}σ) - Likely different user'
+                    else:
+                        authorization_reason = f'REJECTED: Major behavioral difference ({standard_deviations:.2f}σ) - Different user detected'
+
+            
+
+            # Determine risk level and scores
+            if standard_deviations <= 1.0:
+                base_risk_level = 'VERY_LOW'
+                base_risk_score = 0.05
+                base_anomaly_score = 0.05
+            elif standard_deviations <= 2.0:
+                base_risk_level = 'LOW'
+                base_risk_score = 0.15
+                base_anomaly_score = 0.15
+            elif standard_deviations <= 3.0:
+                base_risk_level = 'MEDIUM_LOW'
+                base_risk_score = 0.25
+                base_anomaly_score = 0.25
+            elif standard_deviations <= behavioral_threshold:
+                base_risk_level = 'MEDIUM'
+                base_risk_score = 0.35
+                base_anomaly_score = 0.35
+            elif standard_deviations <= behavioral_threshold + 1.0:
+                base_risk_level = 'MEDIUM_HIGH'
+                base_risk_score = 0.55
+                base_anomaly_score = 0.55
+            elif standard_deviations <= behavioral_threshold + 2.0:
+                base_risk_level = 'HIGH'
+                base_risk_score = 0.75
+                base_anomaly_score = 0.75
+            else:
+                base_risk_level = 'CRITICAL'
+                base_risk_score = 0.90
+                base_anomaly_score = 0.90
+
+            # Adjust risk based on data quality
+            
+
+            # Check for behavioral patterns that suggest different user
+            evasion_signals = current_data.get('evasion_signals', {})
+            unusual_patterns = sum(1 for v in evasion_signals.values() if v) if evasion_signals else 0
+
+            if unusual_patterns >= 4:
+                # Many unusual patterns = likely different user
+                user_risk_multiplier = 1.4
+                risk_level = 'HIGH'
+            elif unusual_patterns >= 3:
+                # Some unusual patterns = possible different user
+                user_risk_multiplier = 1.2
+            elif unusual_patterns >= 2:
+                # Few unusual patterns = minor identity concern
+                user_risk_multiplier = 1.1
+            else:
+                # No unusual patterns = no additional identity risk
+                user_risk_multiplier = 1.0
+
+            raw_risk_score = base_risk_score * risk_adjustment * user_risk_multiplier
+            risk_score = min(0.95, raw_risk_score)
+            print(f"   - Raw calculation: {base_risk_score} * {risk_adjustment} * {user_risk_multiplier} = {raw_risk_score}")
+            print(f"   - FINAL RISK SCORE after min(0.95, {raw_risk_score}): {risk_score}")
+            print(f"   - CONSTANT CHECK: Is this always 0.315? Risk score should vary!")
+
+            raw_anomaly_score = base_anomaly_score * risk_adjustment * user_risk_multiplier
+            anomaly_score = min(0.95, raw_anomaly_score)
+            print(f"   - Anomaly calculation: {base_anomaly_score} * {risk_adjustment} * {user_risk_multiplier} = {raw_anomaly_score}")
+            print(f"   - FINAL ANOMALY SCORE: {anomaly_score}")
+
+            # Determine final risk level
+            if risk_score <= 0.15:
+                risk_level = 'VERY_LOW'
+            elif risk_score <= 0.30:
+                risk_level = 'LOW'
+            elif risk_score <= 0.45:
+                risk_level = 'MEDIUM'
+            elif risk_score <= 0.65:
+                risk_level = 'MEDIUM_HIGH'
+            elif risk_score <= 0.80:
+                risk_level = 'HIGH'
+            else:
+                risk_level = 'CRITICAL'
+
+          
+            
+            suspicious_indicators = []
+
+            # Core threshold violations
+            if standard_deviations > behavioral_threshold:
+                suspicious_indicators.append(f'Exceeds behavioral threshold ({standard_deviations:.2f}σ > {behavioral_threshold:.1f}σ)')
+
+            # Statistical analysis failures
+            if mahalanobis_distance == float('inf'):
+                suspicious_indicators.append('Invalid statistical analysis - insufficient baseline data')
+
+            # Risk level indicators
+            if risk_level in ['HIGH', 'CRITICAL']:
+                suspicious_indicators.append(f'High risk classification: {risk_level}')
+
+            # Identity verification indicators - enhanced for unauthorized user detection
+            if unusual_patterns >= 3:  # Lowered threshold to match main logic
+                suspicious_indicators.append(f'Multiple behavioral inconsistencies detected ({unusual_patterns}) - suggests unauthorized user')
+            elif unusual_patterns >= 2:
+                suspicious_indicators.append(f'Behavioral inconsistencies present ({unusual_patterns}) - unauthorized user concern')
+
+            # Data quality concerns for identity verification
+            
+            if standard_deviations > behavioral_threshold + 1.5:
+                suspicious_indicators.append(f'Significant behavioral difference ({standard_deviations:.2f}σ) - likely different user')
+
+            # Insufficient interaction data - use corrected counting
+            cursor_movements_susp = len(current_data.get('cursor_movements', [])) + len(current_data.get('cursorMovements', []))
+            key_presses_susp = len(current_data.get('key_press_times', [])) + len(current_data.get('keyPressTimes', []))
+            clicks_susp = len(current_data.get('click_timestamps', [])) + len(current_data.get('clickTimestamps', []))
+            total_interactions_susp = cursor_movements_susp + key_presses_susp + clicks_susp
+
+            if total_interactions_susp < 10:
+                suspicious_indicators.append(f'Limited interaction data ({total_interactions_susp} interactions)')
+
+            # Behavioral consistency issues for identity verification
+            if consistency_score_susp < 0.6:
+                suspicious_indicators.append(f'Low behavioral consistency ({consistency_score_susp:.1%}) - unauthorized user concern')
+
+            # Multi-factor unauthorized user indicators
+            combined_risk_score_susp = (1.0 - consistency_score_susp) * 0.4 + min(standard_deviations / safe_threshold, 2.0) * 0.6
+            if combined_risk_score_susp > 1.0:
+                suspicious_indicators.append(f'Multi-factor unauthorized user risk (score={combined_risk_score_susp:.3f})')
+
+            analysis_result = {
+                'is_authorized': is_authorized,
+                'confidence': confidence,
+                'anomaly_score': anomaly_score,
+                'risk_score': risk_score,
+                'authorization_reason': authorization_reason,
+                'recommendation': recommendation,
+
+                # 🔍 IDENTITY VERIFICATION DATA (NEW)
+                'current_behavior': current_data,  # Current behavioral data for identity verification
+                'baseline_data': baseline_data,   # Baseline data for comparison
+
+                # 📊 Statistical analysis results (KEY: 3-sigma implementation)
+                'mahalanobis_distance': float(mahalanobis_distance),
+                'standard_deviations': float(standard_deviations),
+                'sigma_threshold': behavioral_threshold,
+                'within_behavioral_threshold': standard_deviations <= behavioral_threshold,
+                'risk_level': risk_level,
+
+                # 🔍 Analysis details
+                'features_analyzed': num_features,
+                'degrees_of_freedom': num_features,
+                'baseline_variations_used': len(baseline_variations),
+                'behavioral_scaling_factor': 1.0,
+                'statistical_significance': 'HIGH' if mahalanobis_distance != float('inf') else 'INVALID',
+
+                # 🚨 Enhanced risk factors and indicators
+                'risk_factors': [
+                    {
+                        'metric': 'adaptive_behavioral_threshold',
+                        'severity': 'HIGH' if not is_authorized else 'LOW',
+                        'value': standard_deviations,
+                            'threshold': behavioral_threshold,
+                            
+                        },
+                        {
+                            'metric': 'unusual_patterns',
+                            'severity': 'CRITICAL' if unusual_patterns >= 3 else 'MEDIUM' if unusual_patterns >= 1 else 'LOW',
+                            'value': unusual_patterns,
+                            'threshold': 0
+                        },
+                        {
+                            'metric': 'behavioral_consistency',
+                            'threshold': 0.6
+                        }
+                    ],
+                    'suspicious_indicators': suspicious_indicators,
+
+                    # 📊 Enhanced data quality metrics
+                    'data_quality_metrics': {
+                        
+                        
+                        'total_interactions': total_interactions,
+                        'unusual_patterns': unusual_patterns,
+                        'threshold_adaptation': threshold_reason
+                    },
+
+                    # 📝 Enhanced metadata
+                    'analysis_type': 'enhanced_adaptive_behavioral_analysis',
+                    'adaptive_threshold': behavioral_threshold,
+                    'threshold_adaptation_reason': threshold_reason,
+                    'baseline_source': 'UserBaselineBehavior database' if user_id else 'Direct baseline data',
+                    'user_id': user_id if user_id else 'direct_baseline',
+                    'session_id': session_id,
+                    'timestamp': timezone.now().isoformat(),
+
+                    # 🎯 Enhanced compliance and standards
+                    'robust_analysis_compliant': True,
+                    'statistical_method': 'Enhanced Mahalanobis distance with adaptive behavioral threshold',
+                    'multi_layer_validation': True,
+                    'unauthorized_user_detection_active': True,
+                    'profile_size': len(baseline_variations)
+                }
+
+
+
+            if analysis_result.get('authorization_reason', '').startswith('HARD_BLOCK'):
+                print(f"🔒 SKIPPING confidence vs risk check due to hard block")
+            else:
+                analysis_result = self.apply_risk_confidence_check(analysis_result)
+
+
+                is_authorized = analysis_result['is_authorized']
+                authorization_reason = analysis_result['authorization_reason']
+                recommendation = analysis_result['recommendation']
+
+
+                if confidence > risk_score:
+                    print(f"     - Result: AUTHORIZED (Confidence > Risk)")
+                elif risk_score > confidence:
+                    print(f"     - Result: UNAUTHORIZED (Risk > Confidence)")
+                else:
+                    print(f"     - Result: EQUAL SCORES (Using original analysis)")
+
+
+                return analysis_result
+
+        except Exception as e:
+            logger.error(f"Enhanced baseline comparison error: {str(e)}")
+            print(f"🚨 CRITICAL ERROR in enhanced baseline comparison: {e}")
+
+            # ENHANCED: Provide fallback analysis instead of complete failure
+            total_interactions = (len(current_data.get('cursor_movements', [])) + 
+                                len(current_data.get('key_press_times', [])) + 
+                                len(current_data.get('click_timestamps', [])))
+
+            # Check for obvious automation signals
+            evasion_signals = current_data.get('evasion_signals', {})
+            automation_signals = sum(1 for v in evasion_signals.values() if v) if evasion_signals else 0
+
+            if automation_signals >= 5:  # Updated to match simple validation threshold
+                fallback_result = {
+                    'is_authorized': False,
+                    'confidence': 0.8,
+                    'anomaly_score': 0.9,
+                    'risk_score': 0.9,
+                    'mahalanobis_distance': float('inf'),
+                    'standard_deviations': float('inf'),
+                    'authorization_reason': f'AUTOMATION_DETECTED: {automation_signals} clear automation signals detected despite analysis error',
+                    'recommendation': 'BLOCK: Clear automation detected',
+                    'analysis_type': 'fallback_automation_detection',
+                    'error_details': str(e),
+                    'automation_signals': automation_signals,
+
+                    # 🔐 IDENTITY VERIFICATION DATA (NEW)
+                    'current_behavior': current_data,  # Current behavioral data
+                    'baseline_data': {},              # No baseline available in fallback
+
+                    'risk_factors': [
+                        {
+                            'metric': 'automation_signals',
+                            'severity': 'CRITICAL',
+                            'value': automation_signals,
+                            'threshold': 4,
+                            'description': 'Clear automation signals detected'
+                        }
+                    ]
+                }
+                return self.apply_risk_confidence_check(fallback_result)
+            elif total_interactions >= 3:  # Some reasonable interaction
+                fallback_result = {
+                    'is_authorized': True,
+                    'confidence': 0.5,
+                    'anomaly_score': 0.4,
+                    'risk_score': 0.4,
+                    'mahalanobis_distance': 0.0,
+                    'standard_deviations': 0.0,
+                    'authorization_reason': f'FALLBACK_APPROVAL: Analysis error but {total_interactions} interactions suggest human behavior',
+                    'recommendation': f'ALLOW: Fallback approval based on {total_interactions} interactions',
+                    'analysis_type': 'fallback_human_detection',
+                    'error_details': str(e),
+                    'total_interactions': total_interactions,
+
+                    # 🔐 IDENTITY VERIFICATION DATA (NEW)
+                    'current_behavior': current_data,  # Current behavioral data
+                    'baseline_data': {},              # No baseline available in fallback
+
+                    'risk_factors': [
+                        {
+                            'metric': 'fallback_analysis_error',
+                            'severity': 'MEDIUM',
+                            'value': total_interactions,
+                            'threshold': 3,
+                            'description': 'Analysis error but sufficient interactions detected'
+                        }
+                    ]
+                }
+                return self.apply_risk_confidence_check(fallback_result)
+            else:  # Very limited interaction
+                fallback_result = {
+                    'is_authorized': False,
+                    'confidence': 0.6,
+                    'anomaly_score': 0.7,
+                    'risk_score': 0.7,
+                    'mahalanobis_distance': float('inf'),
+                    'standard_deviations': float('inf'),
+                    'authorization_reason': f'INSUFFICIENT_DATA_ERROR: Analysis error and only {total_interactions} interactions',
+                    'recommendation': 'BLOCK: Analysis error with insufficient interaction data',
+                    'analysis_type': 'fallback_insufficient_data',
+                    'error_details': str(e),
+                    'total_interactions': total_interactions,
+
+                    # 🔐 IDENTITY VERIFICATION DATA (NEW)
+                    'current_behavior': current_data,  # Current behavioral data
+                    'baseline_data': {},              # No baseline available in fallback
+
+                    'risk_factors': [
+                        {
+                            'metric': 'insufficient_data_with_error',
+                            'severity': 'HIGH',
+                            'value': total_interactions,
+                            'threshold': 3,
+                            'description': 'Analysis error with insufficient interaction data'
+                        }
+                    ]
+                }
+                return self.apply_risk_confidence_check(fallback_result)
+
+
+        
+
+        def _calculate_cursor_speeds(self, cursor_movements):
+
+            speeds = []
+            try:
+                for i in range(1, len(cursor_movements)):
+                    prev = cursor_movements[i-1]
+                    curr = cursor_movements[i]
+
+                    prev_x = prev.get('x', 0) if isinstance(prev, dict) else prev[0] if isinstance(prev, (list, tuple)) else 0
+                    prev_y = prev.get('y', 0) if isinstance(prev, dict) else prev[1] if isinstance(prev, (list, tuple)) else 0
+                    prev_time = prev.get('timestamp', 0) if isinstance(prev, dict) else prev[2] if isinstance(prev, (list, tuple)) and len(prev) > 2 else 0
+
+                    curr_x = curr.get('x', 0) if isinstance(curr, dict) else curr[0] if isinstance(curr, (list, tuple)) else 0
+                    curr_y = curr.get('y', 0) if isinstance(curr, dict) else curr[1] if isinstance(curr, (list, tuple)) else 0
+                    curr_time = curr.get('timestamp', 0) if isinstance(curr, dict) else curr[2] if isinstance(curr, (list, tuple)) and len(curr) > 2 else 0
+
+                    dx = curr_x - prev_x
+                    dy = curr_y - prev_y
+                    dt = (curr_time - prev_time) / 1000.0  # Convert to seconds
+
+                    if dt > 0:
+                        distance = math.sqrt(dx**2 + dy**2)
+                        speed = distance / dt
+                        speeds.append(speed)
+            except Exception as e:
+                logger.error(f"Error calculating cursor speeds: {str(e)}")
+
+            return speeds
+
+        def _count_direction_changes(self, cursor_movements):
+
+            direction_changes = 0
+            try:
+                if len(cursor_movements) < 3:
+                    return 0
+
+                for i in range(2, len(cursor_movements)):
+                    prev = cursor_movements[i-2]
+                    curr = cursor_movements[i-1] 
+                    next_move = cursor_movements[i]
+
+                    prev_x = prev.get('x', 0) if isinstance(prev, dict) else prev[0] if isinstance(prev, (list, tuple)) else 0
+                    prev_y = prev.get('y', 0) if isinstance(prev, dict) else prev[1] if isinstance(prev, (list, tuple)) else 0
+
+                    curr_x = curr.get('x', 0) if isinstance(curr, dict) else curr[0] if isinstance(curr, (list, tuple)) else 0
+                    curr_y = curr.get('y', 0) if isinstance(curr, dict) else curr[1] if isinstance(curr, (list, tuple)) else 0
+
+                    next_x = next_move.get('x', 0) if isinstance(next_move, dict) else next_move[0] if isinstance(next_move, (list, tuple)) else 0
+                    next_y = next_move.get('y', 0) if isinstance(next_move, dict) else next_move[1] if isinstance(next_move, (list, tuple)) else 0
+
+                    # Calculate direction vectors
+                    dx1 = curr_x - prev_x
+                    dy1 = curr_y - prev_y
+                    dx2 = next_x - curr_x
+                    dy2 = next_y - curr_y
+
+                    # Check for direction change (dot product approach)
+                    if dx1 != 0 or dy1 != 0 or dx2 != 0 or dy2 != 0:
+                        dot_product = dx1 * dx2 + dy1 * dy2
+                        magnitude1 = math.sqrt(dx1**2 + dy1**2)
+                        magnitude2 = math.sqrt(dx2**2 + dy2**2)
+
+                        if magnitude1 > 0 and magnitude2 > 0:
+                            cos_angle = dot_product / (magnitude1 * magnitude2)
+                            # If angle > 90 degrees, it's a significant direction change
+                            if cos_angle < 0:
+                                direction_changes += 1
+
+            except Exception as e:
+                logger.error(f"Error counting direction changes: {str(e)}")
+
+            return direction_changes
+>>>>>>> 94e632f46c91c13fdea348e461634f568aeb697c
 
 
 behavioral_analyzer = BehavioralAnalyzer()
