@@ -118,35 +118,7 @@ class GlobalBehavioralTracker {
       honeypotValue: "",
       TabKeyCount: 0,
       
-      // ❌ REMOVED: All unnecessary metrics not in required list
-      // cursorJitter: [], - not in required list
-      // clickTimes: [], - not in required list
-      // allSpeeds: [], - not in required list
-      // lastScroll: 0, - not in required list
-      // latestSpeed: 0, - not in required list
-      // pasteTimestamp: null, - not in required list
-      // cursorEntropy: 0, - not in required list
-      // botFingerprintScore: null, - not in required list
-      // submitTime: null, - not in required list
-      // cursorAngles: [], - not in required list
-      // mouseTrajectory: [], - not in required list
-      // deviceInfo: {}, - not in required list
-      // isAutomatedBrowser: false, - not in required list
-      // botDetectionResults: null, - not in required list
-      // lastHoverStart: null, - not in required list
-      // audio_fp_entropy_low: null, - not in required list
-      // evasionSignals: {}, - not in required list
-      // gpublacklist: {}, - not in required list
-      // cursorMicroJitter: 0, - not in required list
-      // pathEntropy: 0, - not in required list
-      // accelerationVariance: 0, - not in required list
-      // fittsDeviationScore: 0, - not in required list
-      // idleResumeAngularJerk: 0, - not in required list
-      // thermalHoverNoise: 0, - not in required list
-      // hoverPositions: [], - not in required list
-      // pageHistory: [], - not in required list
-      // totalSessionTime: 0, - not in required list
-      // crossPageMetrics: {} - not in required list
+
     };
 
     // Storage keys
@@ -3341,12 +3313,7 @@ class GlobalBehavioralTracker {
       // Additional required fields
       honeypotValue: "",
       TabKeyCount: 0,
-      
-      // ❌ REMOVED: All unnecessary metrics not in required list
-      // cursorPaths, hoverPatterns, keySequences, typingRhythm
-      // clickPatterns, doubleClickIntervals, scrollDirections, scrollPatterns
-      // pageTransitions, timePerPage, navigationPatterns, totalActiveTime
-      // idlePeriods, pagesVisited, overallBehaviorProfile
+
     };
 
     // Set baseline as HIGH PRIORITY background task - SILENT OPERATION
@@ -3669,11 +3636,7 @@ class GlobalBehavioralTracker {
       return;
     }
 
-    console.log('🚀 ATTEMPTING TO START CONTINUOUS TRANSMISSION');
-    console.log('📍 Current page:', this.behavioralData.currentPage);
-    console.log('⏰ Baseline completed:', this.behavioralData.baselineCompleted);
-    console.log('📊 Baseline collecting:', this.behavioralData.isCollectingBaseline);
-    console.trace('🔍 Call stack for transmission start:');
+    
 
     // 🎯 MARK TRANSMISSION AS STARTED
     this.behavioralData.continuousTransmissionStarted = true;
