@@ -7,6 +7,22 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 // Behavioral data persistence utilities
 const BEHAVIORAL_DATA_KEY_CAPTCHA = 'behavioral_data_captcha_session';
 
+
+
+const HandleAuthRouteNavigation = () => {
+  const navigate = useNavigate();
+  const trackingStarted = globalBehavioralTracker.startAuthRouteTracking();
+  
+  if (trackingStarted) {
+    console.log('✅ Started behavioral tracking for auth route');
+  } else {
+    console.log('❌ Failed to start behavioral tracking');
+  }
+  
+  // Navigate to register page
+  navigate('/register'); // or whatever your navigation method is
+};
+
 const saveBehavioralData = (data) => {
   try {
     localStorage.setItem(BEHAVIORAL_DATA_KEY_CAPTCHA, JSON.stringify(data));
@@ -3025,9 +3041,9 @@ useEffect(() => {
         Go to HTTP Bot Route
       </button>
 
-      <button onClick={goToAuthUserPage} className="bg-blue-500 text-white px-4 py-2 rounded">
-        Go to Auth User Route
-      </button>
+      <button onClick={HandleAuthRouteNavigation} className="bg-green-500 text-white px-4 py-2 rounded">
+  Go To Auth User Route
+</button>
 
       <p className={isBlocked ? "error-message" : ""}>{message}</p>
 

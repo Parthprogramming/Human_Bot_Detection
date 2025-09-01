@@ -7,6 +7,31 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
 const BEHAVIORAL_DATA_KEY_AUTH = 'behavioral_data_auth_session';
 
+
+const HandleLogout = async () => {
+  const navigate = useNavigate();
+  try {
+    // Stop behavioral tracking and send data to backend
+    const dataSent = await globalBehavioralTracker.stopAuthRouteTracking();
+    
+    if (dataSent) {
+      console.log('✅ Behavioral data sent to backend successfully');
+    } else {
+      console.log('❌ Failed to send behavioral data');
+    }
+    
+    // Proceed with logout logic
+    // Clear user session, redirect, etc.
+    localStorage.removeItem('userToken');
+    navigate('/login');
+    
+  } catch (error) {
+    console.error('Error during logout:', error);
+    // Still proceed with logout even if data sending fails
+    navigate('/login');
+  }
+};
+
 const saveBehavioralData = (data) => {
   try {
     localStorage.setItem(BEHAVIORAL_DATA_KEY_AUTH, JSON.stringify(data));
@@ -2911,7 +2936,9 @@ useEffect(() => {
         </div>
         <div className="navbar-user">
           <span>Admin User</span>
-          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+          <button className="logout-btn" onClick={HandleLogout}>
+  Logout
+</button>
         </div>
       </nav>
 

@@ -8,6 +8,7 @@ import Sign_up from "./components/sign-up";
 import Patter_Detection from "./components/Pattern_Detection";
 import Bot_Analysis from "./components/Bot_Analysis";
 import Human_Behavior from "./components/Human_Behavior";
+import globalBehavioralTracker from './utils/globalBehavioralTracker';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -32,6 +33,30 @@ function RouteChangeHandler() {
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize global behavioral tracker
+    if (typeof window !== 'undefined') {
+      window.globalBehavioralTrackerInstance = globalBehavioralTracker;
+    }
+
+    // Optional: Listen for tracking events
+    const handleTrackingStart = (event) => {
+      console.log('🎯 Auth route tracking started:', event.detail);
+    };
+
+    const handleTrackingStop = (event) => {
+      console.log('🛑 Auth route tracking stopped:', event.detail);
+    };
+
+    window.addEventListener('authRouteTrackingStarted', handleTrackingStart);
+    window.addEventListener('authRouteTrackingStopped', handleTrackingStop);
+
+    return () => {
+      window.removeEventListener('authRouteTrackingStarted', handleTrackingStart);
+      window.removeEventListener('authRouteTrackingStopped', handleTrackingStop);
+    };
+  }, []);
+
   return (
     <Router>
       <RouteChangeHandler />

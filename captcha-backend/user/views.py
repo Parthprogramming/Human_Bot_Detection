@@ -333,11 +333,9 @@ def sign_in(request):
 is_authorized = False
 class BehavioralAnalyzer:
    
-    
     def __init__(self):
         self.authorized_profiles = {}  
         self.real_time_sessions = {}   
-    
 
     def _extract_time_series_values(self, data, metric):
         """Extract time-series values for a given metric from behavioral data"""
@@ -405,16 +403,16 @@ class BehavioralAnalyzer:
                     valid_comparisons += 1
             
             if valid_comparisons == 0:
-                return 0.65  # Neutral score when no valid comparisons
+                return 0.75  # Neutral score when no valid comparisons
             
             average_similarity = total_similarity / valid_comparisons
             
             # Apply more generous minimum threshold
-            return max(0.4, min(1.0, average_similarity))
+            return max(0.55, min(1.0, average_similarity))
             
         except Exception as e:
             print(f"Error in time-series analysis: {e}")
-            return 0.65  
+            return 0.75  
     
     def _extract_numeric_features(self, values):
         """Extract numeric features from behavioral data"""
@@ -514,14 +512,14 @@ class BehavioralAnalyzer:
                 return None
             
             if len(current_intervals) < 2 or len(baseline_intervals) < 2:
-                return 0.6  # Neutral for insufficient data
+                return 0.7  # Neutral for insufficient data
             
             # Normalize intervals to compare patterns rather than absolute timing
             current_norm = self._normalize_intervals(current_intervals)
             baseline_norm = self._normalize_intervals(baseline_intervals)
             
             if not current_norm or not baseline_norm:
-                return 0.6
+                return 0.7
             
             # Calculate correlation with generous interpretation
             min_len = min(len(current_norm), len(baseline_norm), 15)  # Limit comparison
@@ -531,11 +529,11 @@ class BehavioralAnalyzer:
             correlation = np.corrcoef(current_sample, baseline_sample)[0, 1]
             
             if math.isnan(correlation):
-                return 0.6
+                return 0.7
             
             # Convert correlation to similarity with generous scaling
-            similarity = (abs(correlation) + 0.3) / 1.3  # Boost correlation scores
-            return max(0.3, min(1.0, similarity))
+            similarity = (abs(correlation) + 0.5) / 1.5  # Boost correlation scores
+            return max(0.4, min(1.0, similarity))
             
         except Exception as e:
             print(f"Error comparing timing rhythms: {e}")
@@ -551,11 +549,11 @@ class BehavioralAnalyzer:
             baseline_range = baseline_max - baseline_min
             
             if baseline_range == 0:
-                return 0.7  # Generous default for zero range
+                return 0.8  # Generous default for zero range
             
             # Compare ranges with generous tolerance
             range_diff = abs(current_range - baseline_range) / baseline_range
-            range_similarity = max(0.2, 1.0 - range_diff * 0.3)  # Very generous
+            range_similarity = max(0.3, 1.0 - range_diff * 0.2)  # Very generous
             
             # Compare overlap
             overlap_start = max(current_min, baseline_min)
@@ -585,7 +583,7 @@ class BehavioralAnalyzer:
             baseline_features = self._extract_numeric_features(baseline_values)
             
             if not current_features or not baseline_features:
-                return 0.6
+                return 0.7
             
             # Calculate multiple similarity measures
             similarities = []
@@ -606,15 +604,15 @@ class BehavioralAnalyzer:
                 similarities.append(range_sim)
             
             if not similarities:
-                return 0.6
+                return 0.7
             
             # Return weighted average with generous interpretation
             final_similarity = sum(similarities) / len(similarities)
-            return max(0.3, min(1.0, final_similarity))
+            return max(0.4, min(1.0, final_similarity))
             
         except Exception as e:
             print(f"Error calculating time-series similarity: {e}")
-            return 0.6
+            return 0.7
         
     def _get_metric_value_safe(self, data, metric):
         """Safely extract metric value with fallbacks"""
@@ -661,7 +659,7 @@ class BehavioralAnalyzer:
                     valid_pairs.append((float(current_val), float(baseline_val)))
 
             if len(valid_pairs) < 2:
-                return 0.6  # Neutral score for insufficient data
+                return 0.7  # Neutral score for insufficient data
             
             current_vec = np.array([pair[0] for pair in valid_pairs])
             baseline_vec = np.array([pair[1] for pair in valid_pairs])
@@ -683,12 +681,12 @@ class BehavioralAnalyzer:
                 # Fallback to element-wise comparison
                 relative_diffs = np.abs(current_vec - baseline_vec) / (np.abs(baseline_vec) + 1e-8)
                 avg_diff = np.mean(relative_diffs)
-                similarity = max(0.2, 1.0 - min(1.0, avg_diff))
+                similarity = max(0.4, 1.0 - min(1.0, avg_diff))
                 return similarity
 
         except Exception as e:
             print(f"Error in statistical analysis: {e}")
-            return 0.6
+            return 0.7
         
     def _analyze_device_fingerprints(self, current_data, baseline_data):
         """Analyze device/environment fingerprints"""
@@ -717,7 +715,7 @@ class BehavioralAnalyzer:
                     if str(current_value) == str(baseline_value):
                         total_score += 1.0
                     else:
-                        total_score += 0.0
+                        total_score += 0.6
                 elif metric == 'gpu_info':
                     current_vendor = str(current_value.get('vendor', '')).lower()
                     baseline_vendor = str(baseline_value.get('vendor', '')).lower()
@@ -725,18 +723,21 @@ class BehavioralAnalyzer:
                     if current_vendor == baseline_vendor:
                         total_score += 1.0
                     elif current_vendor and baseline_vendor:
-                        total_score += 0.7
+                        total_score += 0.8
                     else:
-                        total_score += 0.3
+                        total_score += 0.5
                 # Add other metric comparisons...
                 
                 valid_metrics += 1
+                
+            if valid_metrics == 0:
+                return 0.7
             
-            return total_score / max(valid_metrics, 1)
+            return total_score / valid_metrics
             
         except Exception as e:
             print(f"Error in device analysis: {e}")
-            return 0.5
+            return 0.7
         
     def _analyze_boolean_signals(self, current_data, baseline_data):
         """More lenient boolean signal analysis"""
@@ -753,28 +754,28 @@ class BehavioralAnalyzer:
                 
                 # FIXED: Much lighter penalties
                 if metric == 'paste_detected' and current_value:
-                    total_score -= 0.05  # Reduced from 0.2
+                    total_score -= 0.02  # Reduced from 0.2
                 elif metric == 'is_automated_browser' and current_value:
-                    total_score -= 0.2   # Reduced from 0.5
+                    total_score -= 0.15   # Reduced from 0.5
                 elif metric == 'missing_canvas_fingerprint' and current_value:
-                    total_score -= 0.1   # Reduced from 0.3
+                    total_score -= 0.05   # Reduced from 0.3
                 elif metric == 'suspicious_flag' and current_value:
-                    total_score -= 0.15  # Reduced from 0.4
+                    total_score -= 0.08  # Reduced from 0.4
                 elif metric == 'evasion_signals' and current_value:
                     evasion_data = current_data.get('evasion_signals', {})
                     if isinstance(evasion_data, dict):
                         if evasion_data.get('webdriver', False):
-                            total_score -= 0.3  # Reduced from 0.6
+                            total_score -= 0.2  # Reduced from 0.6
                         if evasion_data.get('languages_spoofed', False):
-                            total_score -= 0.1  # Reduced from 0.3
+                            total_score -= 0.05  # Reduced from 0.3
                         if evasion_data.get('plugins_spoofed', False):
-                            total_score -= 0.1  # Reduced from 0.3
+                            total_score -= 0.05  # Reduced from 0.3
             
-            return max(0.3, total_score)  # Higher minimum score
+            return max(0.5, total_score)  # Higher minimum score
             
         except Exception as e:
             print(f"Error in boolean analysis: {e}")
-            return 0.6  # More generous fallback
+            return 0.75  # More generous fallback
 
     def _check_immediate_red_flags(self, current_data):
             try:
@@ -817,17 +818,17 @@ class BehavioralAnalyzer:
 
             # More balanced and realistic weighting
             weights = {
-                'time_series': 0.35,    # Primary behavioral indicator
+                'time_series': 0.40,    # Primary behavioral indicator
                 'statistical': 0.35,    # Secondary behavioral indicator  
-                'boolean': 0.20,        # Security flags (reduced impact)
+                'boolean': 0.15,        # Security flags (reduced impact)
                 'device': 0.10          # Environment consistency (minimal impact)
             }
 
             # Apply realistic minimum floors - users shouldn't fail on single domain
-            time_series_score = max(0.35, time_series_score)   # Increased floor
-            statistical_score = max(0.35, statistical_score)    # Increased floor
-            boolean_score = max(0.45, boolean_score)            # Higher floor for security
-            device_score = max(0.40, device_score)              # Minimal impact floor
+            time_series_score = max(0.45, time_series_score)   # Increased floor
+            statistical_score = max(0.45, statistical_score)    # Increased floor
+            boolean_score = max(0.60, boolean_score)            # Higher floor for security
+            device_score = max(0.50, device_score)              # Minimal impact floor
 
             final_score = (
                 weights['time_series'] * time_series_score +
@@ -837,23 +838,26 @@ class BehavioralAnalyzer:
             )
 
             # Ensure reasonable bounds with generous interpretation
-            final_score = max(0.3, min(1.0, final_score))
+            final_score = max(0.4, min(1.0, final_score))
 
             print(f"   Final score: {final_score:.3f}")
             return final_score
 
         except Exception as e:
             print(f"Error in score fusion: {e}")
-            return 0.6  # Generous fallback
+            return 0.75  # Generous fallback
     def _compare_metric_arrays(self, current_array, baseline_array):
 
 
         """Compare two arrays of metrics"""
         try:
             if not current_array or not baseline_array:
-                return 0.5
+                return 0.6
             
-            length_similarity = 1.0 - abs(len(current_array) - len(baseline_array)) / max(len(current_array), len(baseline_array), 1)
+            length_diff = abs(len(current_array) - len(baseline_array))
+            max_length = max(len(current_array), len(baseline_array), 1)
+            length_similarity = 1.0 - (length_diff / max_length) * 0.5  # Reduced penalty
+            
             
             if len(current_array) > 0 and len(baseline_array) > 0:
                 try:
@@ -879,7 +883,9 @@ class BehavioralAnalyzer:
                     if current_numeric and baseline_numeric:
                         current_mean = np.mean(current_numeric)
                         baseline_mean = np.mean(baseline_numeric)
-                        value_similarity = 1.0 - abs(current_mean - baseline_mean) / max(abs(baseline_mean), 1)
+                        mean_diff = abs(current_mean - baseline_mean)
+                        tolerance = max(abs(baseline_mean) * 0.5, 50)  # 50% tolerance or minimum 50
+                        value_similarity = max(0.3, 1.0 - (mean_diff / tolerance))
                         return (length_similarity + max(0, min(1, value_similarity))) / 2
                 except:
                     pass
@@ -992,58 +998,109 @@ class BehavioralAnalyzer:
             risk_factors = []
             
             # More permissive fallback - allow users unless clear automation detected
-            if total_interactions >= 3 and automation_signals < 2:  # Very low bar
-                return {
-                    'is_authorized': True,
-                    'confidence': 0.6,
-                    'authorization_reason': f'FALLBACK_ALLOW: Analysis error but {total_interactions} interactions detected',
-                    'analysis_type': 'fallback_analysis',
-                    'recommendation': 'ALLOW: Fallback approval due to analysis error',
-                    'total_interactions': total_interactions,
-                    'automation_signals': automation_signals,
-                    'error_message': str(error_message),
-                    'risk_factors': risk_factors 
-                }
-            else:
-                risk_factors.append({
-                    'metric': 'fallback_insufficient_data',
-                    'severity': 'HIGH',
-                    'value': total_interactions,
-                    'threshold': 3,
-                    'description': f'Insufficient interaction data in fallback: {total_interactions} interactions'
-                })
+            if total_interactions >= 2:  # Very low bar
+                # Check for critical automation signals only
+                has_honeypot = bool(current_data.get('honeypot_value', '').strip())
+                has_webdriver = evasion_signals.get('webdriver', False) if isinstance(evasion_signals, dict) else False
+                has_headless = evasion_signals.get('headless_mode', False) if isinstance(evasion_signals, dict) else False
                 
-                return {
-                    'is_authorized': False,
-                    'confidence': 0.7,
-                    'authorization_reason': f'FALLBACK_BLOCK: Analysis error with insufficient data or automation detected',
-                    'analysis_type': 'fallback_analysis',
-                    'recommendation': 'BLOCK: Fallback rejection due to insufficient data or automation',
-                    'total_interactions': total_interactions,
-                    'automation_signals': automation_signals,
-                    'error_message': str(error_message),
-                    'risk_factors': risk_factors
-                }
+                # Only block if multiple clear automation signals
+                if has_honeypot or (has_webdriver and has_headless):
+                    risk_factors.append({
+                        'metric': 'clear_automation_detected',
+                        'severity': 'HIGH',
+                        'value': 'Multiple automation signals',
+                        'threshold': 'security_violation',
+                        'description': 'Clear automation signals detected in fallback analysis'
+                    })
+                    
+                    return {
+                        'is_authorized': False,
+                        'confidence': 0.8,
+                        'authorization_reason': 'FALLBACK_BLOCK: Clear automation signals detected',
+                        'analysis_type': 'fallback_automation_detected',
+                        'recommendation': 'BLOCK: Clear automation detected',
+                        'total_interactions': total_interactions,
+                        'automation_signals': automation_signals,
+                        'error_message': str(error_message),
+                        'risk_factors': risk_factors 
+                    }
+                else:
+                    # Allow user - analysis error but reasonable interaction
+                    return {
+                        'is_authorized': True,
+                        'confidence': 0.7,
+                        'authorization_reason': f'FALLBACK_ALLOW: Analysis error but {total_interactions} interactions detected',
+                        'analysis_type': 'fallback_analysis',
+                        'recommendation': 'ALLOW: Fallback approval due to analysis error',
+                        'total_interactions': total_interactions,
+                        'automation_signals': automation_signals,
+                        'error_message': str(error_message),
+                        'risk_factors': risk_factors 
+                    }
+            else:
+                # Very minimal interaction - still be permissive unless clear automation
+                has_honeypot = bool(current_data.get('honeypot_value', '').strip())
+                if has_honeypot:
+                    risk_factors.append({
+                        'metric': 'honeypot_filled',
+                        'severity': 'CRITICAL',
+                        'value': current_data.get('honeypot_value'),
+                        'threshold': 'security_violation',
+                        'description': 'Honeypot field filled - clear automation'
+                    })
+                    
+                    return {
+                        'is_authorized': False,
+                        'confidence': 0.9,
+                        'authorization_reason': 'FALLBACK_BLOCK: Honeypot filled with minimal interaction',
+                        'analysis_type': 'fallback_honeypot_detected',
+                        'recommendation': 'BLOCK: Honeypot violation',
+                        'total_interactions': total_interactions,
+                        'error_message': str(error_message),
+                        'risk_factors': risk_factors
+                    }
+                else:
+                    # Allow even with minimal interaction if no clear automation
+                    risk_factors.append({
+                        'metric': 'minimal_interaction_fallback',
+                        'severity': 'MEDIUM',
+                        'value': total_interactions,
+                        'threshold': 2,
+                        'description': f'Minimal interaction in fallback but no clear automation: {total_interactions} interactions'
+                    })
+                    
+                    return {
+                        'is_authorized': True,
+                        'confidence': 0.6,
+                        'authorization_reason': f'FALLBACK_ALLOW: Minimal interaction but no automation signals',
+                        'analysis_type': 'fallback_minimal_interaction',
+                        'recommendation': 'ALLOW: Fallback approval - no clear automation',
+                        'total_interactions': total_interactions,
+                        'error_message': str(error_message),
+                        'risk_factors': risk_factors
+                    }
                       
         except Exception as e:
             print(f"Error in fallback analysis: {e}")
             return {
-                'is_authorized': False,
-                'confidence': 0.3,
-                'authorization_reason': 'CRITICAL_FALLBACK_ERROR: Multiple analysis failures',
-                'analysis_type': 'critical_fallback_error',
-                'recommendation': 'BLOCK: Critical system error',
+                'is_authorized': True,  # Default to allowing on critical error
+                'confidence': 0.5,
+                'authorization_reason': 'CRITICAL_FALLBACK_ALLOW: Multiple analysis failures - defaulting to allow',
+                'analysis_type': 'critical_fallback_allow',
+                'recommendation': 'ALLOW: Critical system error - fail open for user experience',
                 'error_message': str(e),
                 'risk_factors': [  
                     {
-                        'metric': 'critical_error',
-                        'severity': 'CRITICAL',
+                        'metric': 'critical_error_fail_open',
+                        'severity': 'MEDIUM',
                         'value': str(e),
                         'threshold': 'error',
-                        'description': f'Critical fallback error: {str(e)}'
+                        'description': f'Critical fallback error - failing open: {str(e)}'
                     }
                 ]
             }
+
 
 
     def analyze_with_baseline_comparison(self, session_id, current_data, baseline_behavior_or_user_id, baseline_metrics=None):
@@ -1102,7 +1159,7 @@ class BehavioralAnalyzer:
             if not baseline_data:
                 return {
                     'is_authorized': True,
-                    'confidence': 0.6,
+                    'confidence': 0.7,
                     'mahalanobis_distance': 0.0,
                     'standard_deviations': 0.0,
                     'authorization_reason': 'MISSING_BASELINE: No baseline data available - using permissive authorization',
@@ -1143,7 +1200,7 @@ class BehavioralAnalyzer:
             print(f"   ✅ Final fused score: {final_score:.3f}")
 
             # 🎯 FINAL AUTHORIZATION DECISION
-            authorization_threshold = 0.45  # Lowered from 0.6
+            authorization_threshold = 0.35  # Lowered from 0.6
             is_authorized = final_score >= authorization_threshold
             confidence = final_score
 
@@ -1152,39 +1209,39 @@ class BehavioralAnalyzer:
             # Generate risk factors based on analysis
             risk_factors = []
 
-            if time_series_score < 0.5:
+            if time_series_score < 0.4:
                 risk_factors.append({
                     'metric': 'time_series_similarity',
                     'severity': 'HIGH' if time_series_score < 0.3 else 'MEDIUM',
                     'value': time_series_score,
-                    'threshold': 0.5,
+                    'threshold': 0.4,
                     'description': f'Time-series behavioral patterns show low similarity: {time_series_score:.3f}'
                 })
 
-            if statistical_score < 0.5:
+            if statistical_score < 0.4:
                 risk_factors.append({
                     'metric': 'statistical_similarity',
                     'severity': 'HIGH' if statistical_score < 0.3 else 'MEDIUM',
                     'value': statistical_score,
-                    'threshold': 0.5,
+                    'threshold': 0.4,
                     'description': f'Statistical behavioral metrics show low similarity: {statistical_score:.3f}'
                 })
 
-            if boolean_score < 0.7:
+            if boolean_score < 0.6:
                 risk_factors.append({
                     'metric': 'boolean_signals',
                     'severity': 'HIGH' if boolean_score < 0.5 else 'MEDIUM',
                     'value': boolean_score,
-                    'threshold': 0.7,
+                    'threshold': 0.6,
                     'description': f'Boolean risk signals detected: {boolean_score:.3f}'
                 })
 
-            if device_score < 0.6:
+            if device_score < 0.5:
                 risk_factors.append({
                     'metric': 'device_fingerprint',
                     'severity': 'MEDIUM',
                     'value': device_score,
-                    'threshold': 0.6,
+                    'threshold': 0.5,
                     'description': f'Device/environment fingerprint mismatch: {device_score:.3f}'
                 })
 
@@ -1230,26 +1287,7 @@ class BehavioralAnalyzer:
             # Fallback to basic validation
             return self._fallback_analysis(current_data, str(e))
 
-    
-        
-    
-    
 
-    
-
-    
-    
-    
-
-    
-
-    
-    
-
-
-    
-
-    
     def _generate_simple_risk_factors(self, current_data, risk_score, total_interactions):
         """Generate risk factors for simple validation"""
         risk_factors = []
@@ -1328,7 +1366,7 @@ class BehavioralAnalyzer:
                 }
             
             # Basic interaction threshold check
-            min_interactions = 5  # Lowered from previous thresholds
+            min_interactions = 2  # Lowered from previous thresholds
             
             if total_interactions >= min_interactions:
                 # Check for obvious automation signals
@@ -1340,20 +1378,20 @@ class BehavioralAnalyzer:
                 is_automated = current_data.get('is_automated_browser', False)
                 
                 # Calculate simple risk score
-                risk_score = 0.1  # Base risk
+                risk_score = 0.05  # Base risk
                 
                 if automation_signals > 0:
-                    risk_score += 0.2 * min(automation_signals, 3)
+                    risk_score += 0.15 * min(automation_signals, 3)
                 if paste_detected:
-                    risk_score += 0.1
+                    risk_score += 0.05
                 if is_automated:
-                    risk_score += 0.3
+                    risk_score += 0.25
                 
-                risk_score = min(risk_score, 0.9)
+                risk_score = min(risk_score, 0.8)
                 confidence = 1.0 - risk_score
                 
                 # More lenient decision for new users
-                is_authorized = risk_score < 0.6  # Allow up to moderate risk
+                is_authorized = risk_score < 0.7  # Allow up to moderate risk
                 
                 return {
                     'is_authorized': is_authorized,
@@ -1371,9 +1409,9 @@ class BehavioralAnalyzer:
                 # Very limited interaction - still allow but with lower confidence
                 return {
                     'is_authorized': True,  # Be more permissive for new users
-                    'confidence': 0.6,
-                    'risk_score': 0.4,
-                    'anomaly_score': 0.4,
+                    'confidence': 0.7,
+                    'risk_score': 0.3,
+                    'anomaly_score': 0.3,
                     'authorization_reason': f'LIMITED_INTERACTION: Only {total_interactions} interactions but allowing new user',
                     'recommendation': 'ALLOW: New user with limited interaction',
                     'analysis_type': 'limited_interaction_allowed',
@@ -1394,9 +1432,6 @@ class BehavioralAnalyzer:
             return self._fallback_analysis(current_data, str(e))
         
 
-    
-
-    
 
 behavioral_analyzer = BehavioralAnalyzer()
 
@@ -1468,7 +1503,7 @@ def handle_baseline_storage(request):
                 print(f"⚠️ Could not retrieve user session: {session_error}")
                 user_id = f"session_{session_id}"
         
-        print(f"🦅 User ID: {user_id}")
+
         
         # 🦅 Calculate comprehensive data quality score for eagle's eye data
         mouse_movements = len(baseline_data.get('cursorMovements', []))
