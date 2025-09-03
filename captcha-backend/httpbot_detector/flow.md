@@ -1,26 +1,5 @@
-#Current 
+1) for new user , User behaviorial metrics should be calculated after the user has been sign-up and the credentials stored in the "http:127.0.0.1:8000/user/store-baseline-behavior/" , "http:127.0.0.1:8000/user/signup/"and once the user has entered the main dasboard it should keep calculating the behaviorial metrics till the user has clicked on the log out and this will be treated as the baseline behavior .
 
-1) The backend should be retrieving the baseline behavior of the user and compare it with the incoming user behavior and to check the anomaly in the behavior , use the mahalanobis distance to detect the anomaly distance . 
+2) When that same user sign-in , User behaviorial metrics should be calculated continously after the user has logged in and should be sent to the url : "http:127.0.0.1:8000/user/behavioral-analysis/" for continous detection of the authenticated user .
 
-
-
-4) Check if the user is authorized by giving the alert message from the backend and show it not on the frontend . 
-or 
-4) implement the redis ,then  Check if the user is authorized by giving the alert message from the backend and show it not on the frontend . 
-
-1) Pseudo-inverse distance
-
-
-
--------------------------------------------IMPORTANT---------------------------------------------------------
-1) Ensure all pages dont looose the behavior metrics calculated when page refreshed or reloaded
-2) Behavior should be persistent , when navigating thorugh differet pages of the web . 
-
-
-
-Frontend : 
-1)  The Globalbehaviortracker , tracks the behavior of the user across the pages of the website globally .
-The Globalbehaviortracker is main component to track the behavior of the user due to the it is consistent across all the pages .
-
-Backend : 
-1) frontend sends the request to analysis 
+3) user behaviorial metrics should only calculated on the main dashboard page . 

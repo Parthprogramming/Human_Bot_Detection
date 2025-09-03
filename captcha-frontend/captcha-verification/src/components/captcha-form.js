@@ -11,17 +11,23 @@ const BEHAVIORAL_DATA_KEY_CAPTCHA = 'behavioral_data_captcha_session';
 
 const HandleAuthRouteNavigation = () => {
   const navigate = useNavigate();
-  const trackingStarted = globalBehavioralTracker.startAuthRouteTracking();
-  
-  if (trackingStarted) {
-    console.log('✅ Started behavioral tracking for auth route');
-  } else {
-    console.log('❌ Failed to start behavioral tracking');
-  }
-  
-  // Navigate to register page
-  navigate('/register'); // or whatever your navigation method is
+
+  useEffect(() => {
+    const trackingStarted = globalBehavioralTracker.startAuthRouteTracking();
+
+    if (trackingStarted) {
+      console.log("✅ Started behavioral tracking for auth route");
+    } else {
+      console.log("❌ Failed to start behavioral tracking");
+    }
+
+    // Navigate after tracking setup
+    navigate("/register");
+  }, [navigate]);
+
+  return null; // nothing to render
 };
+
 
 const saveBehavioralData = (data) => {
   try {
@@ -3042,7 +3048,7 @@ useEffect(() => {
       </button>
 
       <button onClick={HandleAuthRouteNavigation} className="bg-green-500 text-white px-4 py-2 rounded">
-  Go To Auth User Route
+  Sign-up
 </button>
 
       <p className={isBlocked ? "error-message" : ""}>{message}</p>

@@ -7,30 +7,38 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
 const BEHAVIORAL_DATA_KEY_AUTH = 'behavioral_data_auth_session';
 
-
-const HandleLogout = async () => {
+const HandleLogout = () => {
   const navigate = useNavigate();
-  try {
-    // Stop behavioral tracking and send data to backend
-    const dataSent = await globalBehavioralTracker.stopAuthRouteTracking();
-    
-    if (dataSent) {
-      console.log('✅ Behavioral data sent to backend successfully');
-    } else {
-      console.log('❌ Failed to send behavioral data');
-    }
-    
-    // Proceed with logout logic
-    // Clear user session, redirect, etc.
-    localStorage.removeItem('userToken');
-    navigate('/login');
-    
-  } catch (error) {
-    console.error('Error during logout:', error);
-    // Still proceed with logout even if data sending fails
-    navigate('/login');
-  }
+
+  useEffect(() => {
+    const doLogout = async () => {
+      try {
+        // Stop behavioral tracking and send data to backend
+        const dataSent = await globalBehavioralTracker.stopAuthRouteTracking();
+
+        if (dataSent) {
+          console.log("✅ Behavioral data sent to backend successfully");
+        } else {
+          console.log("❌ Failed to send behavioral data");
+        }
+
+        // Clear user session, redirect, etc.
+        localStorage.removeItem("userToken");
+        navigate("/login");
+      } catch (error) {
+        console.error("Error during logout:", error);
+        // Still proceed with logout even if data sending fails
+        localStorage.removeItem("userToken");
+        navigate("/login");
+      }
+    };
+
+    doLogout();
+  }, [navigate]);
+
+  return null; // nothing to render
 };
+
 
 const saveBehavioralData = (data) => {
   try {
