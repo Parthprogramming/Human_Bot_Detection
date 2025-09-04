@@ -21,11 +21,11 @@ const HandleAuthRouteNavigation = () => {
       console.log("❌ Failed to start behavioral tracking");
     }
 
-    // Navigate after tracking setup
+    
     navigate("/register");
   }, [navigate]);
 
-  return null; // nothing to render
+  return null; 
 };
 
 
