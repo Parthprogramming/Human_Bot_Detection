@@ -200,12 +200,11 @@ class UserBaselineBehavior(models.Model):
         help_text="Complete baseline behavioral data collected during 20-second period"
     )
     
-    # Additional baseline metadata
+    
     collection_start_time = models.DateTimeField(help_text="When baseline collection started")
     collection_end_time = models.DateTimeField(help_text="When baseline collection ended")
     collection_duration_ms = models.IntegerField(help_text="Actual collection duration in milliseconds")
     
-    # Baseline metrics for quick access
     baseline_metrics = models.JSONField(
         default=dict,
         help_text="Calculated baseline metrics (speeds, frequencies, patterns)"

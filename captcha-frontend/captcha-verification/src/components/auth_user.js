@@ -7,38 +7,24 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
 const BEHAVIORAL_DATA_KEY_AUTH = 'behavioral_data_auth_session';
 
-const HandleLogout = () => {
+const useHandleLogout = () => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const doLogout = async () => {
-      try {
-        // Stop behavioral tracking and send data to backend
-        const dataSent = await globalBehavioralTracker.stopAuthRouteTracking();
+  const handleLogoutClick = async () => {
+    try {
+      const dataSent = await globalBehavioralTracker.stopAuthRouteTracking();
+      console.log(dataSent ? "✅ Data sent" : "❌ Failed to send data");
 
-        if (dataSent) {
-          console.log("✅ Behavioral data sent to backend successfully");
-        } else {
-          console.log("❌ Failed to send behavioral data");
-        }
+      localStorage.removeItem("userToken");
+      navigate("/");  
+    } catch (error) {
+      console.error("Error during logout:", error);
+      navigate("/");
+    }
+  };
 
-        // Clear user session, redirect, etc.
-        localStorage.removeItem("userToken");
-        navigate("/login");
-      } catch (error) {
-        console.error("Error during logout:", error);
-        // Still proceed with logout even if data sending fails
-        localStorage.removeItem("userToken");
-        navigate("/login");
-      }
-    };
-
-    doLogout();
-  }, [navigate]);
-
-  return null; // nothing to render
+  return { handleLogoutClick };
 };
-
 
 const saveBehavioralData = (data) => {
   try {
@@ -76,13 +62,9 @@ const clearBehavioralData = () => {
 
 const Authenticate_user = () => {
   const prevpoint = useRef(null);
-  
-  // Load saved behavioral data on component initialization
   const savedData = loadBehavioralData() || {};
-  
   const [usaiId, setUsaiId] = useState(savedData.usaiId || "");
-
-  // Handle unauthorized user detection
+  const { handleLogoutClick } = useHandleLogout();
   const handleUnauthorizedUser = () => {
     // Create and show authentication message modal
     const modal = document.createElement('div');
@@ -155,11 +137,9 @@ const Authenticate_user = () => {
     const goToHttpBotPage = () => {
       navigate('/http-bot-check');
     };
-
       const Pattern_Detection = () => {
       navigate('/pattern-detection');
     };
-
     const Human_detection = () => {
       navigate('/human-behavior');
     };
@@ -167,9 +147,6 @@ const Authenticate_user = () => {
     const Bot_Analysis = () => {
       navigate('/bot-analysis');
     };
-
-
-
   const [postPasteActivity, setPostPasteActivity] = useState(savedData.postPasteActivity || {
     keyPresses: 0,
     mouseMoves: 0,
@@ -188,7 +165,6 @@ const Authenticate_user = () => {
   const [actionCount, setActionCount] = useState(savedData.actionCount || 0);
   const [suspiciousPatterns, setSuspiciousPatterns] = useState(savedData.suspiciousPatterns || []);
   const [botDetectionResults, setBotDetectionResults] = useState(savedData.botDetectionResults || null);
-
   const [mouseJitter, setMouseJitter] = useState(savedData.mouseJitter || []); 
   const [microPauses, setMicroPauses] = useState(savedData.microPauses || []); 
   const [hesitationTimes, setHesitationTimes] = useState(savedData.hesitationTimes || []);
@@ -239,7 +215,6 @@ const Authenticate_user = () => {
   const [thermalHoverNoise, setThermalHoverNoise] = useState(savedData.thermalHoverNoise || 0);
   const [hoverPositions, setHoverPositions] = useState(savedData.hoverPositions || []);
 
-  // Initialize global behavioral tracking for auth-user page
   useEffect(() => {
     console.log('🚀 AUTH-USER page mounted - checking behavioral tracker state');
     
@@ -260,7 +235,6 @@ const Authenticate_user = () => {
     };
   }, []);
 
-  // Real-time sync with global behavioral tracker
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const freshData = globalBehavioralTracker.getBehavioralData();
@@ -286,7 +260,6 @@ const Authenticate_user = () => {
     return () => clearInterval(syncInterval);
   }, [usaiId]);
 
-  // Effect to persist behavioral data to localStorage whenever state changes
   useEffect(() => {
     const behavioralData = {
       usaiId,
@@ -366,16 +339,7 @@ const Authenticate_user = () => {
     idleResumeAngularJerk, thermalHoverNoise, hoverPositions
   ]);
 
-  // Add logout functionality to clear behavioral data
-  const handleLogout = () => {
-    clearBehavioralData();
-    globalBehavioralTracker.clearSession(); // Clear global session data
-    console.log('🔐 User logged out - all behavioral data cleared');
-    // Add any other logout logic here
-    navigate('/'); // or wherever you want to redirect after logout
-  };
 
-  // Effect to expose logout function globally (for use in other components)
   useEffect(() => {
     window.clearAuthBehavioralData = clearBehavioralData;
     
@@ -561,7 +525,6 @@ useEffect(() => {
   };
 }, []);
 
-// Add this to calculate thermalHoverNoise
 useEffect(() => {
   if (hoverPositions.length > 5) {
     const xs = hoverPositions.map((p) => p.x);
@@ -1043,8 +1006,6 @@ useEffect(() => {
       if (prevpoint.current) {
         const dx = currentPoint.x - prevpoint.current.x;
         const dy = currentPoint.y - prevpoint.current.y;
-
-        // Calculate angle
 
         const angleRad = Math.atan2(dy, dx);
         const angleDeg = (angleRad * 180) / Math.PI;
@@ -2142,7 +2103,6 @@ useEffect(() => {
     }
   }, [cursorMovements]);
 
-  // console.log("Mouse moved:", event.clientX, event.clientY); // Debugging
 
   useEffect(() => {
     let idleTimer;
@@ -2392,7 +2352,6 @@ useEffect(() => {
     };
   }, [lastKeyPress, lastMouseMove, lastScroll]);
 
-  // Modified calculateCursorCurvature function
   const calculateCursorCurvature = (movements) => {
     if (movements.length < 5) return 0; // Need at least 5 points for meaningful curvature
 
@@ -2459,7 +2418,6 @@ useEffect(() => {
     }
   }, [clickTimes]);
 
-  // Add new useEffect for initial bot detection
   useEffect(() => {
     const detectAutomatedBrowser = () => {
       const automated =
@@ -2475,7 +2433,6 @@ useEffect(() => {
 
       setIsAutomatedBrowser(automated);
 
-      // Collect device info
       setDeviceInfo({
         userAgent: navigator.userAgent,
         platform: navigator.platform,
@@ -2494,7 +2451,6 @@ useEffect(() => {
     detectAutomatedBrowser();
   }, []);
 
-  // Add new function to detect suspicious patterns
   const detectSuspiciousPatterns = (event) => {
     const now = Date.now();
     const timeSinceLastAction = now - lastActionTime;
@@ -2584,7 +2540,6 @@ useEffect(() => {
     }
   };
 
- 
 
   const detectAutomationPatterns = () => {
     const patterns = [];
@@ -2606,7 +2561,6 @@ useEffect(() => {
     return patterns;
   };
 
-  // Modify submitForm to include automation pattern detection
   const submitForm = async (e) => {
     e.preventDefault();
 
@@ -2615,36 +2569,7 @@ useEffect(() => {
     const isAutomated =
       automationPatterns.length > 0 || botFingerprintScore > 0.7; // Lower threshold
 
-    if (isAutomated) {
-      // Log bot detection results only once here
-      if (botDetectionResults) {
-        console.log("=== BOT DETECTION RESULTS ===");
-        console.log(
-          "Bot Fingerprint Score:",
-          botDetectionResults.botFingerprintScore
-        );
-        console.log(
-          "Automation Flags Detected:",
-          botDetectionResults.automationFlagsDetected
-        );
-        console.log(
-          "Suspicious Features:",
-          botDetectionResults.suspiciousFeatureCount,
-          "out of",
-          botDetectionResults.totalFeatures
-        );
-        console.log(
-          "Suspicious Feature Ratio:",
-          botDetectionResults.suspiciousFeatureRatio
-        );
-        console.log("===========================");
-      }
-
-      console.log("Automation patterns detected:", automationPatterns);
-      setMessage("Automated browser detected! Access denied.");
-      setIsBlocked(true);
-      return;
-    }
+    
 
     if (!usaiId.trim()) {
       alert("Please enter the USAI ID");
@@ -2657,7 +2582,6 @@ useEffect(() => {
       return;
     }
 
-    // Extract additional fingerprint features
 
     const behaviorData = {
       cursorMovements: [...cursorMovements],
@@ -2833,8 +2757,6 @@ useEffect(() => {
     }
   };
 
-  // Add mouse jitter, micro-pauses, and hesitation pattern feature collection to the frontend. These are tracked in state and included in the behavior data sent to the backend.
-  // Mouse Jitter & Micro-pauses calculation
   useEffect(() => {
     let lastMoveTime = Date.now();
     let lastPoint = null;
@@ -2876,7 +2798,7 @@ useEffect(() => {
       document.removeEventListener("mousemove", handleMouseMoveJitter);
   }, []);
 
-  // Hesitation pattern: time hovering over input/button before action
+  
   useEffect(() => {
     const handleMouseEnter = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") {
@@ -2891,7 +2813,6 @@ useEffect(() => {
     };
 
     const handleAction = (e) => {
-      // Only capture hesitation for input fields and buttons
       if (
         (e.type === "click" || e.type === "focus") &&
         (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") &&
@@ -2930,7 +2851,6 @@ useEffect(() => {
 
   return (
     <div className="dashboard">
-      {/* Top Navigation Bar */}
       <nav className="top-navbar">
         <div className="navbar-brand">
           <h2>Bot Detection Dashboard</h2>
@@ -2944,14 +2864,13 @@ useEffect(() => {
         </div>
         <div className="navbar-user">
           <span>Admin User</span>
-          <button className="logout-btn" onClick={HandleLogout}>
+          <button className="logout-btn" onClick={handleLogoutClick}>
   Logout
 </button>
         </div>
       </nav>
 
       <div className="dashboard-body">
-        {/* Left Horizontal Sidebar */}
         <aside className="left-sidebar">
           <div className="sidebar-section">
             <h3>Detection</h3>
@@ -3038,7 +2957,6 @@ useEffect(() => {
           </div>
         </aside>
 
-        {/* Main Content Area */}
         <main className="main-content">
           <div className="content-header">
             <h1>Real-time Bot Detection Monitor</h1>
@@ -3049,7 +2967,6 @@ useEffect(() => {
           </div>
 
           <div className="dashboard-grid">
-            {/* Quick Stats Cards */}
             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-icon">🤖</div>
@@ -3088,7 +3005,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* Activity Feed */}
             <div className="activity-section">
               <h2>Recent Activity</h2>
               <div className="activity-feed">
@@ -3126,7 +3042,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* Behavioral Data Status Panel */}
             <div className="behavioral-data-section">
               <h2>🧠 Behavioral Data Status</h2>
               <div className="behavioral-stats-grid">
@@ -3238,7 +3153,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* Detection Chart Placeholder */}
             <div className="chart-section">
               <h2>Detection Trends</h2>
               <div className="chart-placeholder">
@@ -3250,7 +3164,6 @@ useEffect(() => {
         </main>
       </div>
 
-      {/* Dashboard Styles */}
       <style jsx>{`
         .dashboard {
           min-height: 100vh;
@@ -3769,7 +3682,5 @@ useEffect(() => {
   );
 };
 
-// Export function to clear behavioral data (can be called from other components when user logs out)
 export const clearStoredAuthBehavioralData = clearBehavioralData;
-
 export default Authenticate_user;

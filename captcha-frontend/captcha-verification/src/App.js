@@ -1,6 +1,6 @@
 import logo from './logo.svg';
 import './App.css';
-import Verification from "./components/captcha-form";
+import Verification, { HandleAuthRouteNavigation } from "./components/captcha-form"; // Import both components
 import Http_bot from "./components/http_client_verification";
 import Auth_used from "./components/auth_user";
 import Sign_in from "./components/sign-in";
@@ -8,7 +8,7 @@ import Sign_up from "./components/sign-up";
 import Patter_Detection from "./components/Pattern_Detection";
 import Bot_Analysis from "./components/Bot_Analysis";
 import Human_Behavior from "./components/Human_Behavior";
-import globalBehavioralTracker from './utils/globalBehavioralTracker';
+import GlobalBehavioralTracker from './utils/globalBehavioralTracker';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -36,7 +36,7 @@ function App() {
   useEffect(() => {
     // Initialize global behavioral tracker
     if (typeof window !== 'undefined') {
-      window.globalBehavioralTrackerInstance = globalBehavioralTracker;
+      window.globalBehavioralTrackerInstance = GlobalBehavioralTracker;
     }
 
     // Optional: Listen for tracking events
@@ -69,6 +69,7 @@ function App() {
         <Route path="/pattern-detection" element={<Patter_Detection />} />
         <Route path="/bot-analysis" element={<Bot_Analysis />} />
         <Route path="/human-behavior" element={<Human_Behavior />} />
+        <Route path="/auth-redirect" element={<HandleAuthRouteNavigation />} />
       </Routes>
     </Router>
   );

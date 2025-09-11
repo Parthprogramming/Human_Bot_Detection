@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useMemo, use } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { useNavigate } from 'react-router-dom';
@@ -7,8 +8,7 @@ import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 // Behavioral data persistence utilities
 const BEHAVIORAL_DATA_KEY_CAPTCHA = 'behavioral_data_captcha_session';
 
-
-
+// Move HandleAuthRouteNavigation OUTSIDE of CaptchaForm component
 const HandleAuthRouteNavigation = () => {
   const navigate = useNavigate();
 
@@ -18,23 +18,25 @@ const HandleAuthRouteNavigation = () => {
     if (trackingStarted) {
       console.log("✅ Started behavioral tracking for auth route");
     } else {
-      console.log("❌ Failed to start behavioral tracking");
+      console.log("⚠ Failed to start behavioral tracking");
     }
-
-    
-    navigate("/register");
+    navigate("/sign-up");
   }, [navigate]);
 
   return null; 
 };
 
-
 const saveBehavioralData = (data) => {
+  if (!data) {
+    console.error('⚠ Attempted to save null or undefined behavioral data');
+    return;
+  }
+
   try {
     localStorage.setItem(BEHAVIORAL_DATA_KEY_CAPTCHA, JSON.stringify(data));
     console.log('✅ Captcha behavioral data saved to localStorage');
   } catch (error) {
-    console.error('❌ Error saving captcha behavioral data:', error);
+    console.error('⚠ Error saving captcha behavioral data:', error);
   }
 };
 
@@ -46,7 +48,7 @@ const loadBehavioralData = () => {
       return JSON.parse(savedData);
     }
   } catch (error) {
-    console.error('❌ Error loading captcha behavioral data:', error);
+    console.error('⚠ Error loading captcha behavioral data:', error);
   }
   return {};
 };
@@ -56,16 +58,13 @@ const clearBehavioralData = () => {
     localStorage.removeItem(BEHAVIORAL_DATA_KEY_CAPTCHA);
     console.log('✅ Captcha behavioral data cleared from localStorage');
   } catch (error) {
-    console.error('❌ Error clearing captcha behavioral data:', error);
+    console.error('⚠ Error clearing captcha behavioral data:', error);
   }
 };
 
-
-
 const CaptchaForm = () => {
-  // Load saved behavioral data
   const savedData = loadBehavioralData() || {};
-  console.log('🔄 Captcha component loaded with saved data:', savedData);
+  console.log('📄 Captcha component loaded with saved data:', savedData);
 
   const prevpoint = useRef(null);
   const [usaiId, setUsaiId] = useState("");
@@ -73,8 +72,7 @@ const CaptchaForm = () => {
 
   // Handle unauthorized user detection
   const handleUnauthorizedUser = () => {
-    // Create and show authentication message modal
-    const modal = document.createElement('div');
+const modal = document.createElement('div');
     modal.style.cssText = `
       position: fixed;
       top: 50%;
@@ -3043,11 +3041,11 @@ useEffect(() => {
         Verify
       </button>
 
-      <button onClick={goToHttpBotPage} className="bg-blue-500 text-white px-4 py-2 rounded">
+  <button onClick={goToHttpBotPage} className="bg-blue-500 text-white px-4 py-2 rounded">
         Go to HTTP Bot Route
       </button>
 
-      <button onClick={HandleAuthRouteNavigation} className="bg-green-500 text-white px-4 py-2 rounded">
+      <button onClick={goToAuthUserPage} className="bg-green-500 text-white px-4 py-2 rounded">
   Sign-up
 </button>
 
@@ -3059,3 +3057,4 @@ useEffect(() => {
 };
 
 export default CaptchaForm;
+export { HandleAuthRouteNavigation };

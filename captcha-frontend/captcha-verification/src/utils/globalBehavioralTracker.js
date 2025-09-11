@@ -13,9 +13,7 @@ class GlobalBehavioralTracker {
       currentPage = pageName;
     };
 
-    
-
-    this.isInitialized = false;
+this.isInitialized = false;
     this.sessionId = null;
     this.trackingStartTime = null;
     this.lastSaveTime = 0;
@@ -25,20 +23,27 @@ class GlobalBehavioralTracker {
     this.lastNavigationTime = Date.now();
     this.urlCheckInterval = null;
 
-   
+    this.dashboardUrl = null;
+    this.dashboardReached = false;
+    this.isOnMainDashboard = false;
+    this.transmissionActive = false;
+    this.auth_type = false;
+    this.isRegistrationPhase = false; 
+    this.baselineCollectionActive = false; 
+    this.registrationStartTime = null;
+    this.dashboardEntryTime = null;
+    
     this.eventListeners = [];
     this.backendIntervalId = null;
     this.userLifecycleState = 'anonymous'; 
     this.userId = null;
     this.signupTimestamp = null;
     this.loginTimestamp = null;
-    this.dashboardEntryTime = null;
     this.logoutTimestamp = null;
     this.baselineTimerId = null;
-
     this.STORAGE_KEY = 'global_behavioral_data';
     this.SESSION_KEY = 'global_behavioral_session';
-
+    this.USER_LIFECYCLE_KEY = 'user_lifecycle_state';
    
     this.behavioralData = {
       sessionId: null,
@@ -46,14 +51,12 @@ class GlobalBehavioralTracker {
       pageLoadTime: null,
 
 
-      isCollectingBaseline: false,
-      baselineCollectionStartTime: null,
-     
-      baselineCompleted: false,
-      continuousTransmissionStarted: false, 
-      baselineBehaviorData: null,
-      baselineTimerId: null, 
-      
+      isRegistrationPhase: false,
+      registrationStartTime: null,
+      baselineCollectionActive: false,
+      baselineStartTime: null,
+      baselineEndTime: null, 
+      auth_type: false,
       cursorMovements: [],
       cursorSpeeds: [],
       cursorAcceleration: [],
@@ -133,7 +136,6 @@ class GlobalBehavioralTracker {
 
     };
 
-
     if (typeof window !== 'undefined') {
       this.init();
     }
@@ -144,11 +146,36 @@ class GlobalBehavioralTracker {
       setTimeout(() => this.init(), 0);
     }
   }
+  getSessionStats() {
+  const now = Date.now();
+
+  return {
+    sessionId: this.sessionId || null,
+    currentPage: this.currentPage || null,
+    actionCount: this.behavioralData?.actionCount || 0,
+    lastActionTime: this.behavioralData?.lastActionTime || null,
+    sessionDuration: this.sessionStart ? Math.round((now - this.sessionStart) / 1000) : 0, // in seconds
+    cursorMovements: (this.behavioralData?.cursorMovements || []).length,
+    keyPresses: (this.behavioralData?.keyPressTimes || []).length,
+    clicks: (this.behavioralData?.clickTimestamps || []).length,
+    scrollEvents: (this.behavioralData?.scrollSpeeds || []).length,
+    pasteDetected: this.behavioralData?.pasteDetected || false,
+    isRegistrationPhase: this.behavioralData?.isRegistrationPhase || false,
+    baselineCollectionActive: this.behavioralData?.baselineCollectionActive || false,
+  };
+}
 
   init() {
     if (this.isInitialized) return;
 
+    const currentAuthType = this.auth_type;
     this.loadUserLifecycleState();
+    
+    if (currentAuthType !== false && this.auth_type !== currentAuthType) {
+      console.log('🔒 Preserving explicitly set auth_type:', currentAuthType, 'over loaded value:', this.auth_type);
+      this.auth_type = currentAuthType;
+      this.behavioralData.auth_type = currentAuthType;
+    }
 
     if (!this.sessionId) {
       this.createNewSession();
@@ -159,60 +186,55 @@ class GlobalBehavioralTracker {
     localStorage.removeItem('behavioral_data');
 
     this.createNewSession();
-
     this.collectDeviceFingerprint();
 
     this.startGlobalTracking();
-
     this.setupPeriodicSaving();
-
     this.setupUnloadHandler();
-
     this.setupNavigationDetection();
-
-
-    this.startImmediateBaselineCollection();
+    this.setupLogoutButtonListener();
 
     this.isInitialized = true;
   }
-
-  loadSession() {
-    try {
-      console.log('🔄 Starting fresh behavioral session on website load...');
-
-      // Clear any existing session data to ensure clean start
-      localStorage.removeItem(this.SESSION_KEY);
-      localStorage.removeItem(this.STORAGE_KEY);
-
-      // Force creation of new session
-      this.createNewSession();
-
-      console.log('✅ Fresh behavioral session created:', this.sessionId);
-
-    } catch (error) {
-      console.error('Error creating fresh session:', error);
-      this.createNewSession();
-    }
+  isMainDashboardUrl() {
+    const currentUrl = window.location.href;
+    console.log('🔍 Checking dashboard URL:', currentUrl);
+    
+    // Check for multiple possible dashboard URLs
+    const dashboardPatterns = [
+      'http://localhost:3000/auth-user',
+      '/auth-user',
+      'localhost:3000/dashboard',
+      '/dashboard',
+      'localhost:3000/main',
+      '/main',
+      'localhost:3000/',
+      'localhost:3000'
+    ];
+    
+    const matches = dashboardPatterns.some(pattern => currentUrl.includes(pattern));
+    console.log('📍 Dashboard URL patterns checked:', dashboardPatterns);
+    console.log('✅ URL match result:', matches);
+    
+    return matches || currentUrl.includes('localhost:3000'); // Fallback for any localhost:3000 URL
   }
+
 
   createNewSession() {
     // Generate completely new session ID
     this.sessionId = this.generateSessionId();
     this.trackingStartTime = Date.now();
 
-    // 🔄 COMPLETELY RESET ALL BEHAVIORAL DATA
     this.behavioralData = {
       sessionId: this.sessionId,
       trackingStartTime: this.trackingStartTime,
       pageLoadTime: Date.now(),
 
-      // Reset baseline collection state
-      isCollectingBaseline: false,
-      baselineCollectionStartTime: null,
-      baselineCompleted: false,
-      continuousTransmissionStarted: false,
-      baselineBehaviorData: null,
-      baselineTimerId: null,
+      isRegistrationPhase: false,
+      registrationStartTime: null,
+      baselineCollectionActive: false,
+      baselineStartTime: null,
+      baselineEndTime: null,
 
       cursorMovements: [],
       cursorSpeeds: [],
@@ -315,23 +337,17 @@ class GlobalBehavioralTracker {
 
     
 
-    if (this.baselineTimerId) {
-      clearTimeout(this.baselineTimerId);
-      this.baselineTimerId = null;
-    }
-    window.globalBehavioralTrackerInstance = this;
+    this.sessionId = this.generateSessionId();
+    this.trackingStartTime = Date.now();
 
-
-    if (this.backendIntervalId) {
-      clearInterval(this.backendIntervalId);
-      this.backendIntervalId = null;
-    }
+    this.behavioralData.sessionId = this.sessionId;
+    this.behavioralData.trackingStartTime = this.trackingStartTime;
+    this.behavioralData.pageLoadTime = Date.now();
 
     localStorage.setItem(this.SESSION_KEY, this.sessionId);
     this.saveToStorage();
 
-    console.log('🔄 Complete fresh behavioral session created:', this.sessionId);
-    console.log('🧹 All behavioral data has been reset for new session');
+    console.log('📄 New behavioral session created:', this.sessionId)
   }
 
   handleUserSignup(userId, signupData = {}) {
@@ -375,175 +391,298 @@ class GlobalBehavioralTracker {
     };
   }
 
- handleDashboardEntry(userId) {
-  console.log('🏠 DASHBOARD ENTRY: User entered main dashboard - starting immediate transmission');
-  
-  if (this.userId && this.userId !== userId) {
-    console.warn('⚠️ User ID mismatch during dashboard entry');
-  }
-  
-  this.userId = userId;
-  this.userLifecycleState = 'logged_in';
-  this.loginTimestamp = Date.now();
-  this.dashboardEntryTime = Date.now();
-  
-  this.behavioralData.userId = userId;
-  this.behavioralData.userLifecycleState = 'logged_in';
-  this.behavioralData.loginTimestamp = this.loginTimestamp;
-  this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
-  this.behavioralData.baselineCollectionActive = true;
-  
-  this.resetBehavioralArraysForBaseline();
-  
-  if (!this.isTracking) {
-    this.startGlobalTracking();
-    this.setupPeriodicSaving();
-  }
-  
-  // START IMMEDIATE TRANSMISSION - NO 20 SECOND WAIT
-  this.startContinuousTransmission();
-  
-  this.saveUserLifecycleState();
-  
-  window.dispatchEvent(new CustomEvent('dashboardEntryTracking', {
-    detail: {
-      userId: this.userId,
-      sessionId: this.sessionId,
-      dashboardEntryTime: this.dashboardEntryTime,
-      immediateTransmission: true
+  stopContinuousTransmission() {
+    if (this.backendIntervalId) {
+      clearInterval(this.backendIntervalId);
+      this.backendIntervalId = null;
+      this.transmissionActive = false;
+      console.log('🛑 Continuous transmission stopped');
     }
-  }));
-  
-  return {
-    userId: this.userId,
-    sessionId: this.sessionId,
-    transmissionStarted: true,
-    state: this.userLifecycleState
-  };
-}
+  }
 
+  startBaselineCollection(userId) {
+    // Force initialization if not done
+    if (!this.isInitialized) {
+      this.init();
+    }
 
-  handleUserLogout() {
-    console.log('🚪 USER LOGOUT: Finalizing baseline behavior collection');
+    // Set registration user flags immediately
+    this.auth_type = true;
+    this.userId = userId;
+    this.baselineCollectionActive = true;
+    this.isRegistrationPhase = true;
+    this.dashboardEntryTime = Date.now();
     
-    this.logoutTimestamp = Date.now();
-    this.userLifecycleState = 'baseline_complete';
+    // Ensure behavioral data object exists
+    if (!this.behavioralData) {
+      this.behavioralData = {};
+    }
     
-    // Update behavioral data
-    this.behavioralData.logoutTimestamp = this.logoutTimestamp;
-    this.behavioralData.userLifecycleState = 'baseline_complete';
-    this.behavioralData.baselineCollectionActive = false;
+    // Set up behavioral data for baseline collection
+    this.behavioralData.auth_type = true;
+    this.behavioralData.userId = userId;
+    this.behavioralData.baselineCollectionActive = true;
+    this.behavioralData.baselineStartTime = Date.now();
+    this.behavioralData.isRegistrationPhase = true;
+    this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
+    this.behavioralData.currentPage = 'main_dashboard';
+    this.behavioralData.actionCount = 0;
     
-    // Calculate total baseline duration
-    const baselineDuration = this.dashboardEntryTime ? 
-      (this.logoutTimestamp - this.dashboardEntryTime) : 
-      (this.logoutTimestamp - this.signupTimestamp);
+    // CRITICAL: Enable data collection flag for tracking functions
+    this.behavioralData.isCollectingBaseline = true;
     
-    console.log('📊 Baseline behavior collection completed');
-    console.log('⏱️ Total baseline duration:', (baselineDuration / 1000 / 60).toFixed(2), 'minutes');
-    console.log('🎯 Total actions captured:', this.behavioralData.actionCount);
+    // CRITICAL: Initialize baselineBehaviorData object for recordBaselineEvent function
+    this.behavioralData.baselineBehaviorData = {
+      cursorMovements: [],
+      cursorSpeeds: [],
+      cursorPaths: [],
+      hoverPatterns: [],
+      keyPressTimes: [],
+      keySequences: [],
+      typingRhythm: [],
+      clickTimestamps: [],
+      clickPatterns: [],
+      doubleClickIntervals: [],
+      scrollSpeeds: [],
+      scrollDirections: [],
+      scrollPatterns: [],
+      sessionId: this.sessionId,
+      userId: userId,
+      startTime: Date.now(),
+      currentPage: 'main_dashboard'
+    };
     
-    // Send final baseline data to backend
-    this.sendImmediateBaselineToBackend().then((result) => {
-      console.log('✅ Final baseline data sent to backend');
-      
-      // Emit logout event
-      window.dispatchEvent(new CustomEvent('userLogoutTracking', {
-        detail: {
-          userId: this.userId,
-          sessionId: this.sessionId,
-          logoutTimestamp: this.logoutTimestamp,
-          baselineDuration: baselineDuration,
-          totalActions: this.behavioralData.actionCount,
-          baselineData: this.getBehavioralData(),
-          backendResult: result
-        }
-      }));
-    }).catch((error) => {
-      console.error('❌ Failed to send final baseline data:', error);
-      
-      // Emit logout event with error
-      window.dispatchEvent(new CustomEvent('userLogoutTracking', {
-        detail: {
-          userId: this.userId,
-          sessionId: this.sessionId,
-          logoutTimestamp: this.logoutTimestamp,
-          baselineDuration: baselineDuration,
-          totalActions: this.behavioralData.actionCount,
-          error: error.message
-        }
-      }));
-    });
+    // Initialize behavioral arrays
+    this.ensureArraysInitialized();
     
-    // Stop tracking and transmission
-    this.stopTracking();
+    // Force restart tracking to ensure event listeners are attached
+    this.isTracking = false;
+    this.startGlobalTracking();
+    
+    // Stop any continuous transmission (registration users collect silently)
     this.stopContinuousTransmission();
     
-    // Save final lifecycle state
+    return this.behavioralData.baselineBehaviorData;
+  }
+
+  startRegistrationPhase(userId) {
+    
+    // Stop any existing transmission first (critical!)
+    this.stopContinuousTransmission();
+    
+    // Set up initial registration state
+    this.userId = userId;
+    this.userLifecycleState = 'registering';
+    this.isRegistrationPhase = true;
+    this.registrationStartTime = Date.now();
+    this.auth_type = true; 
+    
+    // Update behavioral data for registration context
+    this.behavioralData.userId = userId;
+    this.behavioralData.userLifecycleState = 'registering';
+    this.behavioralData.isRegistrationPhase = true;
+    this.behavioralData.registrationStartTime = this.registrationStartTime;
+    this.behavioralData.auth_type = true; // CRITICAL: Mark as registration user
+    
+    // FLOW STEP 2->3: Use dedicated baseline collection function
+    const baselineResult = this.startBaselineCollection(userId);
+    
+    // Save state and set up logout listener
     this.saveUserLifecycleState();
+    this.setupLogoutButtonListener();
+    
+
+
+    console.log('� Baseline collection status:', baselineResult);
     
     return {
       userId: this.userId,
       sessionId: this.sessionId,
-      baselineCompleted: true,
-      baselineDuration: baselineDuration,
-      totalActions: this.behavioralData.actionCount,
-      state: this.userLifecycleState
+      registrationStarted: true,
+      state: this.userLifecycleState,
+      silentMode: true,
+      baselineCollectionActive: true,
+      auth_type: true,
+      baselineResult: baselineResult,
+      flowStep: 'registration_phase_complete'
     };
   }
 
-  resetBehavioralArraysForBaseline() {
-    console.log('🔄 Resetting behavioral arrays for baseline collection');
+  handleDirectLogin(userId) {
+    console.log('🔐 DIRECT LOGIN: User logging in directly (not from registration)');
     
-    // Reset all behavioral tracking arrays
-    this.behavioralData.cursorMovements = [];
-    this.behavioralData.cursorSpeeds = [];
-    this.behavioralData.cursorAcceleration = [];
-    this.behavioralData.cursorCurvature = [];
-    this.behavioralData.cursorAngles = [];
-    this.behavioralData.keyPressTimes = [];
-    this.behavioralData.keyHoldTimes = [];
-    this.behavioralData.clickTimestamps = [];
-    this.behavioralData.scrollSpeeds = [];
-    this.behavioralData.mouseJitter = [];
-    this.behavioralData.microPauses = [];
-    this.behavioralData.hesitationTimes = [];
-    this.behavioralData.suspiciousPatterns = [];
+    this.userId = userId;
+    this.userLifecycleState = 'logged_in';
+    this.loginTimestamp = Date.now();
+    this.auth_type = false; // CRITICAL: Mark as direct login user
     
-    // Reset counters
-    this.behavioralData.scrollChanges = 0;
-    this.behavioralData.idleTime = 0;
-    this.behavioralData.actionCount = 0;
-    this.behavioralData.TabKeyCount = 0;
+    this.behavioralData.userId = userId;
+    this.behavioralData.userLifecycleState = 'logged_in';
+    this.behavioralData.loginTimestamp = this.loginTimestamp;
+    this.behavioralData.auth_type = false; // CRITICAL: Mark as direct login user
     
-    // Reset flags
-    this.behavioralData.pasteDetected = false;
+    // Start tracking
+    if (!this.isTracking) {
+      this.startGlobalTracking();
+      this.setupPeriodicSaving();
+    }
     
-    // Reset timing
-    this.behavioralData.lastActionTime = Date.now();
-    this.behavioralData.lastUpdateTime = Date.now();
+    this.saveUserLifecycleState();
     
-    console.log('✅ Behavioral arrays reset for fresh baseline collection');
-  }
-
-  saveUserLifecycleState() {
-    const lifecycleState = {
+    console.log('🚀 DIRECT LOGIN USER: auth_type set to FALSE - Will use real-time transmission');
+    
+    return {
       userId: this.userId,
       sessionId: this.sessionId,
-      userLifecycleState: this.userLifecycleState,
-      signupTimestamp: this.signupTimestamp,
-      loginTimestamp: this.loginTimestamp,
-      dashboardEntryTime: this.dashboardEntryTime,
-      logoutTimestamp: this.logoutTimestamp,
-      savedAt: Date.now()
+      loginStarted: true,
+      state: this.userLifecycleState,
+      auth_type: false
     };
+  }
+  handleDashboardEntry(userId) {
+    console.log('🏠 DASHBOARD ENTRY: User successfully reached dashboard');
+    console.log('🔍 Current auth_type:', this.auth_type);
+    console.log('🔍 Current behavioralData.auth_type:', this.behavioralData.auth_type);
+    console.log('🌐 Current URL:', window.location.href);
     
-    try {
-      localStorage.setItem(this.USER_LIFECYCLE_KEY, JSON.stringify(lifecycleState));
-    } catch (error) {
-      console.error('Error saving lifecycle state:', error);
+    const isDashboardUrl = this.isMainDashboardUrl();
+    console.log('🔍 URL Check Result:', {
+      currentUrl: window.location.href,
+      isDashboardUrl: isDashboardUrl,
+      expectedPattern: 'http://localhost:3000/auth-user or /auth-user'
+    });
+    
+    if (!isDashboardUrl) {
+      console.warn('⚠️ Not on main dashboard URL - BLOCKING DASHBOARD ENTRY!');
+      console.warn('💡 Consider updating isMainDashboardUrl() to match actual dashboard URL');
+      console.warn('🚨 FORCING DASHBOARD ENTRY FOR REGISTRATION USER (auth_type=true)');
+      
+      // Force allow registration users even if URL doesn't match
+      if (this.auth_type === true) {
+        console.log('🔓 FORCE ALLOWING: Registration user detected, bypassing URL check');
+      } else {
+        return { error: 'Not on main dashboard', currentUrl: window.location.href };
+      }
+    }
+    
+    if (this.userId && this.userId !== userId) {
+      console.warn('⚠️ User ID mismatch during dashboard entry');
+    }
+
+    const isRegistrationUser = (this.auth_type === true) || 
+                              (this.userLifecycleState === 'registering') || 
+                              (this.isRegistrationPhase === true);
+    
+    console.log('🔍 DECISION: isRegistrationUser =', isRegistrationUser);
+    
+    if (isRegistrationUser) {
+      console.log('📊 FLOW STEP 1: handleDashboardEntry calling startRegistrationPhase');
+      
+      // FLOW STEP 1->2: Call startRegistrationPhase which will handle baseline collection
+      const registrationResult = this.startRegistrationPhase(userId);
+      
+      // FLOW STEP 5: Set up dashboard properties after registration phase setup
+      this.setupDashboardProperties(userId);
+      
+      console.log('✅ FLOW STEP 5 COMPLETE: Registration phase and dashboard setup done');
+      console.log('📊 Registration result from startRegistrationPhase:', registrationResult);
+      
+      // FLOW STEP 6: Send baseline data to backend via required API
+      console.log('� Sending baseline data to backend...');
+      // Make the HTTP call asynchronous to avoid blocking dashboard navigation
+      this.sendBaselineDataToBackend(registrationResult)
+        .then(result => {
+          console.log('✅ Baseline data sent successfully:', result);
+        })
+        .catch(error => {
+          console.error('❌ Failed to send baseline data:', error);
+          // Don't block UI for network errors
+        });
+      
+      return {
+        sessionId: this.sessionId,
+        dashboardEntryTime: this.dashboardEntryTime,
+        baselineCollectionStarted: true,
+        silentMode: true,
+        status: 'registration_flow_complete',
+        auth_type: true,
+        userType: 'registration',
+        registrationResult: registrationResult,
+        flowStep: 'completed'
+      };
+      
+    } else {
+      console.log('🚀 DIRECT LOGIN USER PATH: Starting real-time transmission');
+      this.handleDirectLogin(userId);
+      
+      // Set dashboard entry properties for direct login users
+      this.userId = userId;
+      this.userLifecycleState = 'logged_in';
+      this.loginTimestamp = Date.now();
+      this.isOnMainDashboard = true;
+      this.dashboardReached = true;
+      this.dashboardEntryTime = Date.now();
+      this.dashboardUrl = window.location.href;
+      
+      // Reset behavioral data for fresh baseline collection
+      this.resetBehavioralArraysForBaseline();
+      
+      // Start baseline collection for direct login users
+      this.baselineCollectionActive = true;
+      this.behavioralData.baselineCollectionActive = true;
+      this.behavioralData.baselineStartTime = Date.now();
+      
+      // Update behavioral data with dashboard entry info
+      this.behavioralData.userId = userId;
+      this.behavioralData.userLifecycleState = 'logged_in';
+      this.behavioralData.loginTimestamp = this.loginTimestamp;
+      this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
+      this.behavioralData.currentPage = 'main_dashboard';
+      this.behavioralData.dashboardUrl = this.dashboardUrl;
+      
+      // Ensure tracking is active
+      if (!this.isTracking) {
+        this.startGlobalTracking();
+        this.setupPeriodicSaving();
+      }
+      
+      // Start continuous transmission for direct login users
+      this.startContinuousTransmission();
+      this.saveUserLifecycleState();
+      
+      return {
+        sessionId: this.sessionId,
+        dashboardEntryTime: this.dashboardEntryTime,
+        baselineCollectionStarted: true,
+        silentMode: false,
+        status: 'active_transmission',
+        auth_type: false,
+        userType: 'direct_login'
+      };
     }
   }
+  saveUserLifecycleState() {
+  const lifecycleState = {
+    userId: this.userId,
+    sessionId: this.sessionId,
+    userLifecycleState: this.userLifecycleState,
+    isRegistrationPhase: this.isRegistrationPhase,
+    registrationStartTime: this.registrationStartTime,
+    loginTimestamp: this.loginTimestamp,
+    dashboardEntryTime: this.dashboardEntryTime,
+    logoutTimestamp: this.logoutTimestamp,
+    baselineCollectionActive: this.baselineCollectionActive,
+    auth_type: this.auth_type, // Make sure this is saved
+    savedAt: Date.now()
+  };
+  
+  try {
+    localStorage.setItem(this.USER_LIFECYCLE_KEY, JSON.stringify(lifecycleState));
+    console.log('💾 Saved lifecycle state with auth_type:', this.auth_type);
+  } catch (error) {
+    console.error('Error saving lifecycle state:', error);
+  }
+}
 
   loadUserLifecycleState() {
     try {
@@ -554,48 +693,56 @@ class GlobalBehavioralTracker {
         this.userId = lifecycleState.userId;
         this.sessionId = lifecycleState.sessionId;
         this.userLifecycleState = lifecycleState.userLifecycleState;
-        this.signupTimestamp = lifecycleState.signupTimestamp;
+        this.isRegistrationPhase = lifecycleState.isRegistrationPhase;
+        this.registrationStartTime = lifecycleState.registrationStartTime;
         this.loginTimestamp = lifecycleState.loginTimestamp;
         this.dashboardEntryTime = lifecycleState.dashboardEntryTime;
         this.logoutTimestamp = lifecycleState.logoutTimestamp;
+        this.baselineCollectionActive = lifecycleState.baselineCollectionActive;
+        
+        // CRITICAL FIX: Properly restore auth_type with explicit check
+        if (lifecycleState.auth_type !== undefined) {
+          this.auth_type = lifecycleState.auth_type;
+          console.log('📋 Restored auth_type from storage:', this.auth_type);
+        } else {
+          // Default to false if not found (direct login behavior)
+          this.auth_type = false;
+          console.warn('⚠️ No auth_type in saved state - defaulting to false');
+        }
         
         // Update behavioral data with loaded state
         this.behavioralData.userId = this.userId;
         this.behavioralData.sessionId = this.sessionId;
         this.behavioralData.userLifecycleState = this.userLifecycleState;
-        this.behavioralData.signupTimestamp = this.signupTimestamp;
+        this.behavioralData.isRegistrationPhase = this.isRegistrationPhase;
+        this.behavioralData.registrationStartTime = this.registrationStartTime;
         this.behavioralData.loginTimestamp = this.loginTimestamp;
         this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
         this.behavioralData.logoutTimestamp = this.logoutTimestamp;
+        this.behavioralData.baselineCollectionActive = this.baselineCollectionActive;
+        this.behavioralData.auth_type = this.auth_type; // ENSURE behavioral data matches
         
-        console.log('📁 Loaded lifecycle state:', lifecycleState.userLifecycleState);
+        console.log('📋 Loaded lifecycle state:', {
+          userLifecycleState: lifecycleState.userLifecycleState,
+          auth_type: this.auth_type,
+          isRegistrationPhase: this.isRegistrationPhase
+        });
+      } else {
+        // No saved state - set defaults
+        this.auth_type = false;
+        console.log('📋 No saved lifecycle state - defaulting auth_type to false');
       }
     } catch (error) {
       console.error('Error loading lifecycle state:', error);
+      this.auth_type = false; // Default fallback
     }
-  }
+  } 
 
-  getUserLifecycleInfo() {
-    return {
-      userId: this.userId,
-      sessionId: this.sessionId,
-      state: this.userLifecycleState,
-      signupTimestamp: this.signupTimestamp,
-      loginTimestamp: this.loginTimestamp,
-      dashboardEntryTime: this.dashboardEntryTime,
-      logoutTimestamp: this.logoutTimestamp,
-      isBaselineActive: this.behavioralData.baselineCollectionActive,
-      trackingDuration: this.dashboardEntryTime ? 
-        (Date.now() - this.dashboardEntryTime) : 
-        (this.signupTimestamp ? (Date.now() - this.signupTimestamp) : 0),
-      totalActions: this.behavioralData.actionCount
-    };
-  }
-  
 
   saveSession() {
     this.saveToStorage();
   }
+
 
   forceResetSession() {
 
@@ -608,7 +755,6 @@ class GlobalBehavioralTracker {
     }
   }
 
-
   ensureArraysInitialized() {
     const requiredArrays = [
       'cursorMovements', 'cursorSpeeds', 'cursorAcceleration', 'cursorCurvature',
@@ -619,38 +765,23 @@ class GlobalBehavioralTracker {
     requiredArrays.forEach(arrayName => {
       if (!Array.isArray(this.behavioralData[arrayName])) {
         this.behavioralData[arrayName] = [];
-        console.warn(`🛡️ Initialized missing array: ${arrayName}`);
       }
     });
 
     const requiredObjects = [
       'lastKeyDown', 'postPasteActivity', 'canvasMetrics', 'unusualScreenResolution',
-      'gpuInfo', 'gpublacklist', 'timingMetrics', 'evasionSignals', 'crossPageMetrics'
+      'gpuInfo', 'timingMetrics', 'crossPageMetrics'
     ];
 
     requiredObjects.forEach(objName => {
       if (typeof this.behavioralData[objName] !== 'object' || this.behavioralData[objName] === null) {
         this.behavioralData[objName] = {};
-        console.warn(`🛡️ Initialized missing object: ${objName}`);
       }
     });
-
-    if (!this.behavioralData.crossPageMetrics.totalPageTransitions) {
-      this.behavioralData.crossPageMetrics = {
-        totalPageTransitions: 0,
-        avgTimePerPage: 0,
-        totalActions: 0,
-        avgActionsPerPage: 0,
-        ...this.behavioralData.crossPageMetrics
-      };
-    }
   }
 
   generateSessionId() {
-
-
-    const timestamp = Date.now().toString(36); // Base36 timestamp
-
+    const timestamp = Date.now().toString(36);
     const array = new Uint8Array(16);
     if (window.crypto && window.crypto.getRandomValues) {
       window.crypto.getRandomValues(array);
@@ -659,55 +790,22 @@ class GlobalBehavioralTracker {
         array[i] = Math.floor(Math.random() * 256);
       }
     }
-
     const randomString = Array.from(array, byte => byte.toString(36).padStart(2, '0')).join('').substring(0, 12);
-
-    const userAgent = navigator.userAgent || '';
-    const screen = `${window.screen.width}x${window.screen.height}`;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const language = navigator.language || 'en';
-
-    const browserData = `${userAgent}${screen}${timezone}${language}`;
-    let fingerprint = 0;
-    for (let i = 0; i < browserData.length; i++) {
-      fingerprint = ((fingerprint << 5) - fingerprint + browserData.charCodeAt(i)) & 0xffffffff;
-    }
-    const fingerprintHex = Math.abs(fingerprint).toString(36).substring(0, 8);
-
-    const performanceNow = performance.now().toString().replace('.', '');
-    const entropy = performanceNow.substring(-6) + Math.random().toString(36).substring(2, 8);
-
-    return `${timestamp}-${randomString}-${fingerprintHex}-${entropy}`;
+    return `${timestamp}-${randomString}`;
   }
+
 
   startGlobalTracking() {
     if (this.isTracking) return;
 
     this.isTracking = true;
 
-    const handleMouseMove = (event) => {
-      this.trackMouseMovement(event);
-    };
-
-    const handleKeyDown = (event) => {
-      this.trackKeyDown(event);
-    };
-
-    const handleKeyUp = (event) => {
-      this.trackKeyUp(event);
-    };
-
-    const handleClick = (event) => {
-      this.trackClick(event);
-    };
-
-    const handleScroll = (event) => {
-      this.trackScroll(event);
-    };
-
-    const handlePaste = (event) => {
-      this.trackPaste(event);
-    };
+    const handleMouseMove = (event) => this.trackMouseMovement(event);
+    const handleKeyDown = (event) => this.trackKeyDown(event);
+    const handleKeyUp = (event) => this.trackKeyUp(event);
+    const handleClick = (event) => this.trackClick(event);
+    const handleScroll = (event) => this.trackScroll(event);
+    const handlePaste = (event) => this.trackPaste(event);
 
     this.addEventListener(document, 'mousemove', handleMouseMove);
     this.addEventListener(document, 'keydown', handleKeyDown);
@@ -715,8 +813,8 @@ class GlobalBehavioralTracker {
     this.addEventListener(document, 'click', handleClick);
     this.addEventListener(window, 'scroll', handleScroll);
     this.addEventListener(document, 'paste', handlePaste);
-
   }
+
 
   addEventListeners() {
     // Mouse movement tracking
@@ -776,7 +874,6 @@ class GlobalBehavioralTracker {
     }
 
     this.isTracking = false;
-
   }
 
   addEventListener(element, event, handler) {
@@ -801,7 +898,7 @@ class GlobalBehavioralTracker {
         winding: ctx.isPointInPath ? 'supported' : 'not_supported',
         geometryLength: canvasFingerprint.length,
         textLength: navigator.userAgent.length,
-        canvasFingerprint: canvasFingerprint.substring(0, 100) // First 100 chars
+        canvasFingerprint: canvasFingerprint.substring(0, 100)
       };
 
       const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -811,14 +908,7 @@ class GlobalBehavioralTracker {
           gpu_name: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'unknown',
           vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'unknown',
           renderer: gl.getParameter(gl.RENDERER),
-          webgl_info: gl.getParameter(gl.VERSION),
-          capabilities: {
-            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-            maxViewportDims: gl.getParameter(gl.MAX_VIEWPORT_DIMS)
-          },
-          extensions: gl.getSupportedExtensions() || [],
-          driver_info: navigator.userAgent,
-          graphics_api: 'WebGL'
+          webgl_info: gl.getParameter(gl.VERSION)
         };
       } else {
         this.behavioralData.missingCanvasFingerprint = true;
@@ -826,73 +916,11 @@ class GlobalBehavioralTracker {
           gpu_name: 'webgl_not_supported',
           vendor: 'unknown',
           renderer: 'unknown',
-          webgl_info: 'not_available',
-          capabilities: null,
-          extensions: [],
-          driver_info: navigator.userAgent,
-          graphics_api: 'none'
+          webgl_info: 'not_available'
         };
       }
 
-      const screenInfo = {
-        width_height: `${window.screen.width}x${window.screen.height}`,
-        inner_width: window.innerWidth,
-        device_pixel_ratio: window.devicePixelRatio || 1,
-        aspect_ratio: (window.screen.width / window.screen.height).toFixed(2)
-      };
-
-      const commonResolutions = ['1920x1080', '1366x768', '1536x864', '1440x900', '1280x720'];
-      const isUnusual = !commonResolutions.includes(screenInfo.width_height);
-
-      this.behavioralData.unusualScreenResolution = {
-        ...screenInfo,
-        is_unusual: isUnusual,
-        spoofedMismatch: Math.abs(window.innerWidth - window.screen.width) > 100, // Detect potential spoofing
-        aspectRatio: parseFloat(screenInfo.aspect_ratio)
-      };
-
-      this.behavioralData.evasionSignals = {
-        webdriver: navigator.webdriver || false,
-        automation: window.chrome && window.chrome.runtime && window.chrome.runtime.onConnect,
-        phantom: window.callPhantom || window._phantom,
-        selenium: window.selenium || document.$cdc_asdjflasutopfhvcZLmcfl_,
-
-        languages_mismatch: navigator.language !== navigator.languages[0],
-        plugins_empty: navigator.plugins.length === 0,
-        webgl_disabled: !gl,
-
-        performance_now_precision: performance.now() % 1 === 0, // Perfect milliseconds = suspicious
-
-        headless_chrome: navigator.userAgent.includes('HeadlessChrome'),
-        automation_keywords: /PhantomJS|Selenium|WebDriver|ChromeDriver/.test(navigator.userAgent)
-      };
-
-      this.behavioralData.timingMetrics = {
-        trackingStartTime: Date.now(),
-        domContentLoaded: performance.timing ? performance.timing.domContentLoaded : Date.now(),
-        pageLoadComplete: performance.timing ? performance.timing.loadEventEnd : Date.now(),
-        navigationStart: performance.timing ? performance.timing.navigationStart : Date.now(),
-        firstPaint: performance.getEntriesByType ?
-          (performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0) : 0,
-        mouseMovementFrequency: 0,
-        keyPressFrequency: 0,
-        clickFrequency: 0,
-        lastKeyPress: null,
-        lastMouseMove: null,
-        lastClick: null,
-        pageLoadTime: performance.timing ?
-          (performance.timing.loadEventEnd - performance.timing.navigationStart) : 1200,
-        timeToFirstClick: 0 
-      };
-
-      console.log('🔍 Device fingerprinting completed:', {
-        deviceFingerprint: this.behavioralData.deviceFingerprint,
-        gpuSupported: !!gl,
-        screenResolution: screenInfo.width_height,
-        evasionSignals: Object.keys(this.behavioralData.evasionSignals).filter(
-          key => this.behavioralData.evasionSignals[key]
-        )
-      });
+      console.log('🔍 Device fingerprinting completed');
 
     } catch (error) {
       console.error('❌ Error collecting device fingerprint:', error);
@@ -900,8 +928,6 @@ class GlobalBehavioralTracker {
       this.behavioralData.missingCanvasFingerprint = true;
     }
   }
-
-
 
   createHashFromString(str) {
     let hash = 0;
@@ -930,18 +956,22 @@ class GlobalBehavioralTracker {
       timestamp: now,
       page: this.behavioralData.currentPage
     };
-
-
-
     this.ensureArraysInitialized();
     
-
     const previousLastUpdateTime = this.behavioralData.lastUpdateTime;
     this.behavioralData.lastUpdateTime = now;
 
-    if (this.behavioralData.isCollectingBaseline) {
+    // PRIORITY: Handle baseline collection for registration users
+    if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
       this.recordBaselineEvent('mouseMove', event, now);
+      // Also record to main behavioral data for registration users
+      this.behavioralData.cursorMovements.push(newPoint);
+      this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
+      return; // Exit early for registration users to avoid double processing
     }
+
+    // Regular processing for direct login users
+    if (this.auth_type === false) {
 
     const timeSinceLastUpdate = now - this.behavioralData.lastUpdateTime;
     let isThrottled = false;
@@ -1104,44 +1134,41 @@ class GlobalBehavioralTracker {
     this.behavioralData.lastMouseMove = newPoint;
     this.behavioralData.actionCount++;
     this.behavioralData.lastActionTime = now;
+    } // Close the if (this.auth_type === false) conditional
   }
 
   trackKeyDown(event) {
     const now = Date.now();
     
-    this.behavioralData.lastKeyDown[event.key] = now;
-    
-    this.behavioralData.keyPressTimes = [
-      ...this.behavioralData.keyPressTimes.slice(-99),
-      now
-    ];
-    
-    if (this.behavioralData.lastKeyPress) {
-      const timeSinceLastKeyPress = now - this.behavioralData.lastKeyPress;
+    // PRIORITY: Handle baseline collection for registration users
+    if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
+      this.recordBaselineEvent('keyDown', event, now);
+      // Also record to main behavioral data
+      this.behavioralData.lastKeyDown[event.key] = now;
+      this.behavioralData.keyPressTimes.push(now);
+      this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
+      this.behavioralData.lastActionTime = now;
+      return;
+    }
+
+    // Regular processing for direct login users
+    if (this.auth_type === false) {
+      this.behavioralData.lastKeyDown[event.key] = now;
       
-      if (timeSinceLastKeyPress > 50 && timeSinceLastKeyPress < 200) {
-        console.log('✅ Keyboard micropause detected:', { duration: timeSinceLastKeyPress, timestamp: now, key: event.key });
-        console.log('Before push - microPauses length:', this.behavioralData.microPauses?.length || 0);
-        this.behavioralData.microPauses.push({
-          duration: timeSinceLastKeyPress,
-          timestamp: now,
-          beforeAction: 'keyPress',
-          key: event.key
-        });
-        console.log('After push - microPauses length:', this.behavioralData.microPauses?.length || 0);
-        console.log('Current microPauses array:', this.behavioralData.microPauses);
+      this.behavioralData.keyPressTimes = [
+        ...this.behavioralData.keyPressTimes.slice(-99),
+        now
+      ];
+      
+      this.behavioralData.lastKeyPress = now;
+      this.behavioralData.actionCount++;
+      this.behavioralData.lastActionTime = now;
+
+      if (event.key === 'Tab') {
+        this.behavioralData.TabKeyCount++;
       }
     }
-    
-    this.behavioralData.timingMetrics.lastKeyPress = now;
-    this.behavioralData.timingMetrics.keyPressFrequency = 
-      (this.behavioralData.timingMetrics.keyPressFrequency || 0) + 1;
-    
-    this.behavioralData.lastKeyPress = now;
-    this.behavioralData.actionCount++;
-    this.behavioralData.lastActionTime = now;
   }
-
   trackKeyUp(event) {
     const now = Date.now();
     const keyDownTime = this.behavioralData.lastKeyDown[event.key];
@@ -1166,124 +1193,72 @@ class GlobalBehavioralTracker {
   trackClick(event) {
     const now = Date.now();
 
-    if (this.behavioralData.timingMetrics.timeToFirstClick === 0) {
-      this.behavioralData.timingMetrics.timeToFirstClick = now - this.behavioralData.trackingStartTime;
-    }
-
-    if (this.behavioralData.isCollectingBaseline) {
+    // PRIORITY: Handle baseline collection for registration users
+    if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
       this.recordBaselineEvent('click', event, now);
+      // Also record to main behavioral data
+      this.behavioralData.clickTimestamps.push(now);
+      this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
+      this.behavioralData.lastActionTime = now;
+      return;
     }
 
-    if (this.behavioralData.lastClickTime) {
-      const timeSinceLastClick = now - this.behavioralData.lastClickTime;
-      
-      console.log('🕰️ Checking for click hesitation and micropause:', { timeSinceLastClick, lastClickTime: this.behavioralData.lastClickTime });
-
-      if (timeSinceLastClick > 500 && timeSinceLastClick < 5000) {
-        console.log('✅ Click hesitation detected:', { duration: timeSinceLastClick, timestamp: now });
-        console.log('Before push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
-        this.behavioralData.hesitationTimes.push({
-          duration: timeSinceLastClick,
-          timestamp: now,
-          beforeAction: 'click',
-          coordinates: { x: event.clientX, y: event.clientY }
-        });
-        console.log('After push - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
-        console.log('Current hesitationTimes array:', this.behavioralData.hesitationTimes);
-      }
-      
-      if (timeSinceLastClick > 50 && timeSinceLastClick < 200) {
-        console.log('✅ Click micropause detected:', { duration: timeSinceLastClick, timestamp: now });
-        console.log('Before push - microPauses length:', this.behavioralData.microPauses?.length || 0);
-        this.behavioralData.microPauses.push({
-          duration: timeSinceLastClick,
-          timestamp: now,
-          beforeAction: 'click',
-          coordinates: { x: event.clientX, y: event.clientY }
-        });
-        console.log('After push - microPauses length:', this.behavioralData.microPauses?.length || 0);
-        console.log('Current microPauses array:', this.behavioralData.microPauses);
-      }
-    } else {
-      console.log('⚠️ No lastClickTime available for click hesitation/micropause detection');
-    }
-
-    this.behavioralData.clickTimestamps = [
-      ...this.behavioralData.clickTimestamps.slice(-99),
-      now
-    ];
-
-    if (this.behavioralData.lastClickTime) {
-      const interval = now - this.behavioralData.lastClickTime;
-      this.behavioralData.clickTimes = [
-        ...this.behavioralData.clickTimes.slice(-99),
-        interval
+    // Regular processing for direct login users
+    if (this.auth_type === false) {
+      this.behavioralData.clickTimestamps = [
+        ...this.behavioralData.clickTimestamps.slice(-99),
+        now
       ];
 
-      if (this.behavioralData.clickTimes.length > 3) {
-        const recentIntervals = this.behavioralData.clickTimes.slice(-5);
-        const avgInterval = recentIntervals.reduce((sum, int) => sum + int, 0) / recentIntervals.length;
-        const variance = recentIntervals.reduce((sum, int) => sum + Math.pow(int - avgInterval, 2), 0) / recentIntervals.length;
-
-        if (variance < 50 && avgInterval < 1000) {
-          this.behavioralData.suspiciousPatterns.push({
-            type: 'mechanical_clicking',
-            timestamp: now,
-            metrics: { avgInterval, variance }
-          });
-        }
-      }
+      this.behavioralData.lastClickTime = now;
+      this.behavioralData.actionCount++;
+      this.behavioralData.lastActionTime = now;
     }
-
-    this.behavioralData.timingMetrics.lastClick = now;
-    this.behavioralData.timingMetrics.clickFrequency =
-      (this.behavioralData.timingMetrics.clickFrequency || 0) + 1;
-
-    this.behavioralData.lastClickTime = now;
-    this.behavioralData.actionCount++;
-    this.behavioralData.lastActionTime = now;
   }
 
   trackScroll(event) {
     const now = Date.now();
-    this.behavioralData.scrollChanges++;
 
-    if (this.behavioralData.isCollectingBaseline) {
+    // PRIORITY: Handle baseline collection for registration users
+    if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
       this.recordBaselineEvent('scroll', event, now);
+      this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
+      this.behavioralData.lastActionTime = now;
+      return;
     }
 
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const timeDiff = now - this.behavioralData.lastScrollTime;
-    const scrollDiff = Math.abs(scrollTop - this.behavioralData.lastScroll);
+    // Regular processing for direct login users  
+    if (this.auth_type === false) {
+      this.behavioralData.scrollChanges++;
 
-    if (timeDiff > 0) {
-      const scrollSpeed = scrollDiff / timeDiff;
-      this.behavioralData.scrollSpeeds = [
-        ...this.behavioralData.scrollSpeeds.slice(-99),
-        scrollSpeed
-      ];
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const timeDiff = now - (this.behavioralData.lastScrollTime || now);
+      const scrollDiff = Math.abs(scrollTop - (this.behavioralData.lastScroll || 0));
+
+      if (timeDiff > 0) {
+        const scrollSpeed = scrollDiff / timeDiff;
+        this.behavioralData.scrollSpeeds = [
+          ...this.behavioralData.scrollSpeeds.slice(-99),
+          scrollSpeed
+        ];
+      }
+
+       this.behavioralData.lastScroll = scrollTop;
+      this.behavioralData.lastScrollTime = now;
+      this.behavioralData.actionCount++;
+      this.behavioralData.lastActionTime = now;
     }
-
-    this.behavioralData.lastScroll = scrollTop;
-    this.behavioralData.lastScrollTime = now;
-    this.behavioralData.actionCount++;
-    this.behavioralData.lastActionTime = now;
   }
 
    setCurrentPage(pageName) {
     const now = Date.now();
     const previousPage = this.behavioralData.currentPage;
 
-    // 🛡️ Ensure pageHistory is initialized (defensive programming)
     if (!this.behavioralData.pageHistory) {
       this.behavioralData.pageHistory = [];
     }
 
     if (previousPage && previousPage !== pageName) {
-      // Track page transition
-      this.behavioralData.crossPageMetrics.totalPageTransitions++;
-
-      // Calculate time spent on previous page
       const pageStartTime = this.behavioralData.pageHistory.find(
         p => p.page === previousPage && !p.endTime
       );
@@ -1304,6 +1279,7 @@ class GlobalBehavioralTracker {
 
     console.log(`📄 Page tracking: ${pageName}`);
   }
+
 
   getCurrentPage() {
     return this.behavioralData.currentPage || 'unknown';
@@ -1335,146 +1311,202 @@ class GlobalBehavioralTracker {
     setInterval(() => {
       this.saveToStorage();
     }, this.saveInterval);
-
   }
 
   saveToStorage() {
     try {
-      this.updateCrossPageMetrics();
-
-
-      const now = Date.now();
-      const timeSinceLastAction = now - this.behavioralData.lastActionTime;
-
-      if (timeSinceLastAction > 2000) {
-        this.behavioralData.idleTime += Math.min(timeSinceLastAction, 30000); 
-      }
-
-      if (this.behavioralData.timingMetrics) {
-        this.behavioralData.timingMetrics.lastUpdateTime = now;
-      }
-
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
-      this.lastSaveTime = Date.now();
-
     } catch (error) {
       console.error('Error saving behavioral data:', error);
     }
   }
 
-  async sendToBackend() {
-  try {
-    console.log('📊 DEBUG: sendToBackend called', {
-      timestamp: new Date().toISOString(),
-      sessionId: this.sessionId,
-      backendIntervalId: this.backendIntervalId
-    });
-
-    // REMOVED: Baseline collection checks - now sends data immediately
+  
+  async sendBaselineDataToBackend(registrationResult) {
+    console.log('📤 IMMEDIATE BASELINE SEND: Sending registration baseline data to backend');
+    console.log('🎯 Registration result:', registrationResult);
     
-    const rollingWindowData = this.createRollingWindows();
-    const convertedBehavioralData = this.convertToBackendFormat();
-
-    console.log('📤 Sending behavioral payload to backend...', {
-      sessionId: this.sessionId,
-      dataPoints: Object.keys(convertedBehavioralData).length,
-      actionCount: convertedBehavioralData.action_count,
-      rollingWindows: rollingWindowData.windows.length
-    });
-
-    const response = await fetch('http://127.0.0.1:8000/user/behavioral-analysis/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        session_id: this.sessionId,
-        user_id: this.userId,
-        signup_timestamp: this.signupTimestamp,
-        dashboard_entry_time: this.dashboardEntryTime,
-        logout_timestamp: this.logoutTimestamp,
-        behavioral_data: {
-          ...convertedBehavioralData,
-          timestamp: Date.now(),
-          currentPage: this.behavioralData.currentPage || 'unknown',
-          rollingWindows: rollingWindowData.windows,
-          windowMetadata: rollingWindowData.metadata,
-          immediateMode: true // Flag to indicate immediate transmission
-        }
-      })
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log('📊 Behavioral analysis result:', {
-        status: result.user_auth_status,
-        authorized: result.is_authorized,
-        riskScore: result.risk_score,
-        recommendation: result.recommendation
-      });
-
-      this.behavioralData.lastAnalysisResult = result;
-      this.behavioralData.lastAnalysisTime = Date.now();
-
-      if (!result.is_authorized) {
-        console.warn('🚨 UNAUTHORIZED USER DETECTED!');
-        this.showAuthenticationMessage(result.recommendation || 'Behavioral patterns do not match authorized user');
-        this.handleUnauthorizedUser(result);
-      }
-
-      window.dispatchEvent(new CustomEvent('behavioralAnalysis', {
-        detail: result
-      }));
-    } else {
-      console.warn('Backend behavioral analysis failed:', response.status, response.statusText);
-    }
-  } catch (error) {
-    console.warn('Could not send behavioral data to backend:', error.message);
-  }
-}
-
-  async sendBaselineToBackend() {
     if (!this.userId) {
-      throw new Error('No user ID available for baseline storage');
+      console.error('❌ No user ID available for baseline storage');
+      return { error: 'No user ID' };
     }
-    
-    console.log('📤 Sending baseline behavior data to backend');
     
     try {
-      const convertedData = this.convertToBackendFormat();
+      // Prepare current baseline data for immediate transmission
+      const currentBaselineData = {
+        sessionId: this.sessionId,
+        userId: this.userId,
+        
+        // Time tracking from registration result
+        registrationStartTime: registrationResult.registrationStartTime || this.registrationStartTime,
+        dashboardEntryTime: registrationResult.dashboardEntryTime || this.dashboardEntryTime,
+        baselineStartTime: registrationResult.baselineResult?.baselineStartTime || Date.now(),
+        currentTimestamp: Date.now(),
+        
+        // Current behavioral data (may be empty at start)
+        cursorMovements: this.behavioralData.cursorMovements || [],
+        cursorSpeeds: this.behavioralData.cursorSpeeds || [],
+        cursorAcceleration: this.behavioralData.cursorAcceleration || [],
+        cursorCurvature: this.behavioralData.cursorCurvature || [],
+        keyPressTimes: this.behavioralData.keyPressTimes || [],
+        keyHoldTimes: this.behavioralData.keyHoldTimes || [],
+        clickTimestamps: this.behavioralData.clickTimestamps || [],
+        scrollSpeeds: this.behavioralData.scrollSpeeds || [],
+        
+        // Advanced metrics
+        mouseJitter: this.behavioralData.mouseJitter || [],
+        microPauses: this.behavioralData.microPauses || [],
+        hesitationTimes: this.behavioralData.hesitationTimes || [],
+        suspiciousPatterns: this.behavioralData.suspiciousPatterns || [],
+        keyboardPatterns: this.behavioralData.keyboardPatterns || [],
+        
+        // Activity metrics
+        scrollChanges: this.behavioralData.scrollChanges || 0,
+        idleTime: this.behavioralData.idleTime || 0,
+        pasteDetected: this.behavioralData.pasteDetected || false,
+        actionCount: this.behavioralData.actionCount || 0,
+        TabKeyCount: this.behavioralData.TabKeyCount || 0,
+        
+        // Device and fingerprinting info
+        deviceFingerprint: this.behavioralData.deviceFingerprint || '0',
+        canvasMetrics: this.behavioralData.canvasMetrics || {},
+        gpuInfo: this.behavioralData.gpuInfo || {},
+        unusualScreenResolution: this.behavioralData.unusualScreenResolution || {},
+        missingCanvasFingerprint: this.behavioralData.missingCanvasFingerprint || false,
+        
+        // Page tracking
+        currentPage: this.behavioralData.currentPage || 'main_dashboard',
+        pageHistory: this.behavioralData.pageHistory || [],
+        
+        // Post-paste activity tracking
+        postPasteActivity: this.behavioralData.postPasteActivity || { keypressAfterPaste: 0 },
+        
+        // Timing metrics
+        timingMetrics: this.behavioralData.timingMetrics || {},
+        
+        // Authentication context
+        auth_type: this.auth_type,
+        userLifecycleState: this.userLifecycleState,
+        isRegistrationPhase: this.isRegistrationPhase,
+        baselineCollectionActive: this.baselineCollectionActive
+      };
       
       const payload = {
         session_id: this.sessionId,
         user_id: this.userId,
-        signup_timestamp: this.signupTimestamp,
+        baseline_data: currentBaselineData,
+        collection_trigger: 'immediate_after_registration',
+        collection_duration: Date.now() - (registrationResult.baselineResult?.baselineStartTime || Date.now()),
+        baseline_type: 'registration_immediate_baseline',
+        auth_type: this.auth_type,
+        total_actions: this.behavioralData.actionCount || 0,
+        registration_start_time: this.registrationStartTime,
         dashboard_entry_time: this.dashboardEntryTime,
-        logout_timestamp: this.logoutTimestamp,
-        baseline_duration: this.dashboardEntryTime ? 
-          (this.logoutTimestamp - this.dashboardEntryTime) : 
-          (this.logoutTimestamp - this.signupTimestamp),
-        baseline_data: convertedData
+        immediate_send_time: Date.now(),
+        registration_result: registrationResult
       };
+      
+      console.log('📊 IMMEDIATE baseline payload summary:', {
+        sessionId: this.sessionId,
+        userId: this.userId,
+        collectionDuration: payload.collection_duration,
+        totalActions: payload.total_actions,
+        trigger: payload.collection_trigger,
+        dataPoints: {
+          cursorMovements: currentBaselineData.cursorMovements.length,
+          keyPresses: currentBaselineData.keyPressTimes.length,
+          clicks: currentBaselineData.clickTimestamps.length,
+          scrollEvents: currentBaselineData.scrollSpeeds.length,
+          jitterEvents: currentBaselineData.mouseJitter.length,
+          hesitations: currentBaselineData.hesitationTimes.length,
+          microPauses: currentBaselineData.microPauses.length
+        }
+      });
       
       const response = await fetch('http://127.0.0.1:8000/user/store-baseline-behavior/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(payload)
       });
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Baseline data stored successfully');
+        console.log('✅ IMMEDIATE baseline data stored successfully in backend');
+        console.log('📊 Backend response:', {
+          status: result.status || 'success',
+          message: result.message || 'Immediate baseline data stored',
+          baselineId: result.baseline_id || null,
+          timestamp: result.timestamp || null
+        });
         return result;
       } else {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        const errorDetail = response.status === 422 ? 
+          'Validation error - check payload format' : 
+          `HTTP ${response.status}`;
+        
+        console.error('❌ Failed to store immediate baseline data:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        
+        throw new Error(`${errorDetail}: ${errorText}`);
       }
     } catch (error) {
-      console.error('❌ Failed to send baseline data:', error);
+      console.error('❌ Network error sending immediate baseline data:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      
       throw error;
     }
+  }
+
+  setupDashboardProperties(userId) {
+    console.log('🏠 Setting up dashboard properties for user:', userId);
+    
+    // Set dashboard entry properties
+    this.userId = userId;
+    this.userLifecycleState = 'logged_in';
+    this.loginTimestamp = Date.now();
+    this.isOnMainDashboard = true;
+    this.dashboardReached = true;
+    this.dashboardEntryTime = Date.now();
+    this.dashboardUrl = window.location.href;
+    
+    // Update behavioral data with dashboard entry info
+    this.behavioralData.userId = userId;
+    this.behavioralData.userLifecycleState = 'logged_in';
+    this.behavioralData.loginTimestamp = this.loginTimestamp;
+    this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
+    this.behavioralData.currentPage = 'main_dashboard';
+    this.behavioralData.dashboardUrl = this.dashboardUrl;
+    
+    console.log('✅ Dashboard properties configured');
+  }
+
+  
+  calculateBaselineQualityMetrics() {
+    const totalTime = this.behavioralData.baselineEndTime - this.behavioralData.baselineStartTime;
+    
+    return {
+      totalDurationMs: totalTime,
+      totalActions: this.behavioralData.actionCount,
+      actionsPerSecond: this.behavioralData.actionCount / (totalTime / 1000),
+      mouseMovements: (this.behavioralData.cursorMovements || []).length,
+      keyPresses: (this.behavioralData.keyPressTimes || []).length,
+      clicks: (this.behavioralData.clickTimestamps || []).length,
+      scrollEvents: (this.behavioralData.scrollSpeeds || []).length,
+      averageSpeed: this.calculateAverageSpeed(),
+      jitterEvents: (this.behavioralData.mouseJitter || []).length,
+      hesitationEvents: (this.behavioralData.hesitationTimes || []).length,
+      micropauseEvents: (this.behavioralData.microPauses || []).length
+    };
   }
 
   convertToBackendFormat() {
@@ -1877,61 +1909,27 @@ class GlobalBehavioralTracker {
 
   setupUnloadHandler() {
     const handleUnload = () => {
-      this.updateCrossPageMetrics();
-      this.saveToLocalStorage();
+      this.saveToStorage();
     };
-
     window.addEventListener('beforeunload', handleUnload);
     window.addEventListener('pagehide', handleUnload);
   }
 
   setupNavigationDetection() {
-    console.log('🌐 Setting up navigation detection for URL changes...');
-
     this.currentUrl = window.location.href;
-    this.lastNavigationTime = Date.now();
-
-    const handlePopState = (event) => {
-      console.log('🔄 POPSTATE detected - URL changed manually or via browser navigation');
+    
+    const handlePopState = () => {
       this.handleUrlChange('popstate', window.location.href);
     };
 
-    const handleHashChange = (event) => {
-      console.log('🔄 HASHCHANGE detected - Fragment identifier changed');
+    const handleHashChange = () => {
       this.handleUrlChange('hashchange', window.location.href);
     };
 
-    const originalPushState = window.history.pushState;
-    const originalReplaceState = window.history.replaceState;
-
-    window.history.pushState = function (...args) {
-      originalPushState.apply(window.history, args);
-      console.log('🔄 PUSHSTATE detected - Programmatic navigation');
-      window.globalBehavioralTrackerInstance?.handleUrlChange('pushstate', window.location.href);
-    };
-
-    window.history.replaceState = function (...args) {
-      originalReplaceState.apply(window.history, args);
-      console.log('🔄 REPLACESTATE detected - Programmatic navigation');
-      window.globalBehavioralTrackerInstance?.handleUrlChange('replacestate', window.location.href);
-    };
-
-    this.urlCheckInterval = setInterval(() => {
-      const currentUrl = window.location.href;
-      if (currentUrl !== this.currentUrl) {
-        console.log('🔄 URL CHANGE detected via periodic check');
-        console.log(`Previous: ${this.currentUrl}`);
-        console.log(`Current: ${currentUrl}`);
-        this.handleUrlChange('manual_check', currentUrl);
-      }
-    }, 500); 
-
-    // 5️⃣ Listen for page visibility changes (when user comes back to tab)
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         const currentUrl = window.location.href;
         if (currentUrl !== this.currentUrl) {
-          console.log('🔄 URL CHANGE detected on visibility change');
           this.handleUrlChange('visibility_change', currentUrl);
         }
       }
@@ -1941,7 +1939,7 @@ class GlobalBehavioralTracker {
     const handleFocus = () => {
       const currentUrl = window.location.href;
       if (currentUrl !== this.currentUrl) {
-        console.log('🔄 URL CHANGE detected on focus');
+        console.log('📄 URL CHANGE detected on focus');
         this.handleUrlChange('focus_change', currentUrl);
       }
     };
@@ -1962,86 +1960,280 @@ class GlobalBehavioralTracker {
 
   }
 
-  handleDashboardEntryImmediate(userId) {
-  console.log('🏠 DASHBOARD ENTRY: Starting immediate behavioral transmission');
-  
-  this.userId = userId;
-  this.userLifecycleState = 'logged_in';
-  this.loginTimestamp = Date.now();
-  this.dashboardEntryTime = Date.now();
-  
-  // Update behavioral data
-  this.behavioralData.userId = userId;
-  this.behavioralData.userLifecycleState = 'logged_in';
-  this.behavioralData.loginTimestamp = this.loginTimestamp;
-  this.behavioralData.dashboardEntryTime = this.dashboardEntryTime;
+  setupLogoutButtonListener() {
+    // Wait for DOM to be ready before setting up logout listener
+    const setupListener = () => {
+      // Look for logout button with various possible selectors
+      const logoutSelectors = [
+        'button[onclick*="logout"]',
+        'button:contains("Logout")',
+        'button:contains("Log out")',
+        'a[href*="logout"]',
+        '.logout-button',
+        '#logout-btn',
+        '[data-action="logout"]',
+        'button[type="button"]' // Generic fallback - we'll filter by text content
+      ];
 
-  
-  
-  // Reset arrays for fresh dashboard session
-  this.resetBehavioralArraysForBaseline();
-  
-  // Ensure tracking is active
-  if (!this.isTracking) {
-    this.startGlobalTracking();
-    this.setupPeriodicSaving();
+      let logoutButton = null;
+
+      // Try to find logout button using multiple selectors
+      for (const selector of logoutSelectors) {
+        try {
+          if (selector.includes(':contains')) {
+            // Handle :contains selector manually since it's not standard
+            const buttonSelector = selector.split(':contains')[0];
+            const textContent = selector.match(/\("([^"]+)"\)/)?.[1];
+            const buttons = document.querySelectorAll(buttonSelector);
+            for (const btn of buttons) {
+              if (btn.textContent && btn.textContent.toLowerCase().includes(textContent?.toLowerCase() || '')) {
+                logoutButton = btn;
+                break;
+              }
+            }
+          } else {
+            logoutButton = document.querySelector(selector);
+          }
+          
+          if (logoutButton) {
+            console.log(`🎯 Found logout button using selector: ${selector}`);
+            break;
+          }
+        } catch (error) {
+          // Continue to next selector if current one fails
+          continue;
+        }
+      }
+
+      // Fallback: Search for buttons containing "logout" text
+      if (!logoutButton) {
+        const allButtons = document.querySelectorAll('button, a');
+        for (const btn of allButtons) {
+          const text = btn.textContent?.toLowerCase() || '';
+          const onclick = btn.getAttribute('onclick')?.toLowerCase() || '';
+          const href = btn.getAttribute('href')?.toLowerCase() || '';
+          
+          if (text.includes('logout') || text.includes('log out') || 
+              onclick.includes('logout') || href.includes('logout')) {
+            logoutButton = btn;
+            console.log(`🎯 Found logout button by text/attribute search: "${btn.textContent}"`);
+            break;
+          }
+        }
+      }
+
+      if (logoutButton) {
+        // Remove any existing listener to avoid duplicates
+        const existingHandler = logoutButton.getAttribute('data-behavioral-logout-listener');
+        if (existingHandler) {
+          console.log('🔄 Logout listener already exists, skipping');
+          return;
+        }
+
+        // Create the logout handler
+        const handleLogout = async (event) => {
+          console.log('🚪 LOGOUT BUTTON CLICKED: Processing baseline data submission');
+          console.log('🔍 Current user state:', {
+            auth_type: this.auth_type,
+            userId: this.userId,
+            baselineCollectionActive: this.baselineCollectionActive,
+            actionCount: this.behavioralData?.actionCount || 0
+          });
+
+          // Only send baseline data for registration users
+          if (this.auth_type === true && this.behavioralData?.actionCount > 0) {
+            try {
+              console.log('📤 Sending baseline data to backend before logout...');
+              
+              // Call handleUserLogout which will send baseline data
+              const result = await this.handleUserLogout();
+              
+              console.log('✅ Baseline data sent successfully:', result);
+              
+              // Optional: Add a small delay to ensure data is sent
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+            } catch (error) {
+              console.error('❌ Error sending baseline data:', error);
+              
+              // Still allow logout to proceed even if baseline sending fails
+              console.warn('⚠️ Logout will proceed despite baseline data sending failure');
+            }
+          } else {
+            console.log('ℹ️ No baseline data to send (direct login user or no data collected)');
+          }
+
+          // Mark that we've processed the logout
+          console.log('✅ Logout processing completed');
+        };
+
+        // Add the event listener
+        logoutButton.addEventListener('click', handleLogout, { capture: true });
+        
+        // Mark that we've added the listener
+        logoutButton.setAttribute('data-behavioral-logout-listener', 'true');
+        
+        console.log('✅ Logout button listener added successfully');
+        console.log('🎯 Logout button element:', logoutButton);
+        
+        // Store the listener for cleanup
+        this.eventListeners.push({
+          element: logoutButton,
+          event: 'click',
+          handler: handleLogout
+        });
+
+      } else {
+        console.warn('⚠️ Logout button not found. Will retry in 2 seconds...');
+        
+        // Retry after a delay (button might not be rendered yet)
+        setTimeout(() => {
+          this.setupLogoutButtonListener();
+        }, 2000);
+      }
+    };
+
+    // Setup immediately if DOM is ready, otherwise wait
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupListener);
+    } else {
+      // Try immediately
+      setupListener();
+      
+      // Also try after a delay in case the button is dynamically rendered
+      setTimeout(setupListener, 1000);
+    }
   }
+
+  resetBehavioralArraysForBaseline() {
+  console.log('🔄 Resetting behavioral arrays for fresh baseline collection');
   
-  // Start immediate continuous transmission - no delays
-  this.startImmediateContinuousTransmission();
+  // Reset all behavioral tracking arrays to start fresh
+  this.behavioralData.cursorMovements = [];
+  this.behavioralData.cursorSpeeds = [];
+  this.behavioralData.cursorAcceleration = [];
+  this.behavioralData.cursorCurvature = [];
+  this.behavioralData.cursorAngles = [];
+  this.behavioralData.keyPressTimes = [];
+  this.behavioralData.keyHoldTimes = [];
+  this.behavioralData.clickTimestamps = [];
+  this.behavioralData.scrollSpeeds = [];
+  this.behavioralData.mouseJitter = [];
+  this.behavioralData.microPauses = [];
+  this.behavioralData.hesitationTimes = [];
+  this.behavioralData.suspiciousPatterns = [];
+  this.behavioralData.keyboardPatterns = [];
   
-  this.saveUserLifecycleState();
+  // Reset counters and flags
+  this.behavioralData.scrollChanges = 0;
+  this.behavioralData.idleTime = 0;
+  this.behavioralData.actionCount = 0;
+  this.behavioralData.TabKeyCount = 0;
+  this.behavioralData.pasteDetected = false;
   
-  return {
-    userId: this.userId,
-    sessionId: this.sessionId,
-    immediateTransmissionStarted: true,
-    state: this.userLifecycleState
-  };
+  // Reset timing references
+  this.behavioralData.lastActionTime = Date.now();
+  this.behavioralData.lastUpdateTime = Date.now();
+  this.behavioralData.lastKeyPress = null;
+  this.behavioralData.lastMouseMove = null;
+  this.behavioralData.lastClickTime = null;
+  this.behavioralData.lastScrollTime = Date.now();
+  this.behavioralData.lastKeyDown = {};
+  
+  // Reset tracking state
+  this.behavioralData.trackingStartTime = Date.now();
+  this.behavioralData.pageLoadTime = Date.now();
+  
+  console.log('✅ Behavioral arrays reset - ready for fresh collection');
 }
 
-
-
-startImmediateContinuousTransmission() {
-  // Stop any existing transmission
-  if (this.backendIntervalId) {
-    clearInterval(this.backendIntervalId);
-    this.backendIntervalId = null;
+  
+  handleUserLogin(userId, userData) {
+    console.log('🔐 USER LOGIN: Starting behavioral tracking for authenticated user');
+    
+    this.userId = userId;
+    this.userLifecycleState = 'logged_in';
+    this.loginTimestamp = Date.now();
+    
+    // Update behavioral data
+    this.behavioralData.userId = userId;
+    this.behavioralData.userLifecycleState = 'logged_in';
+    this.behavioralData.loginTimestamp = this.loginTimestamp;
+    this.behavioralData.userData = userData;
+    
+    // Save lifecycle state
+    this.saveUserLifecycleState();
+    
+    // Prepare for dashboard entry
+    console.log('✅ User authenticated - ready for dashboard behavioral tracking');
+    
+    return {
+        userId: this.userId,
+        sessionId: this.sessionId,
+        loginTimestamp: this.loginTimestamp,
+        state: this.userLifecycleState
+    };
   }
-  
-  // Mark transmission as started
-  this.behavioralData.continuousTransmissionStarted = true;
-  
-  console.log('🚀 Starting immediate continuous transmission on dashboard entry');
-  
-  // Send first payload immediately
-  this.sendToBackend().then(() => {
-    console.log('✅ First behavioral payload sent immediately');
-  }).catch((error) => {
-    console.warn('⚠️ First payload failed, continuing transmission:', error);
-  });
-  
-  // Start continuous transmission every 1 second
-  this.backendIntervalId = setInterval(() => {
-    this.sendToBackend();
-  }, this.backendInterval);
-  
-  console.log('✅ Immediate continuous transmission active (every 1 second)');
-}
+
+  handleDashboardExit() {
+    console.log('🚪 DASHBOARD EXIT: Stopping behavioral transmission');
+    
+    this.isOnMainDashboard = false;
+    this.transmissionActive = false;
+    
+    // Stop backend transmission
+    this.stopContinuousTransmission();
+    
+    // Update behavioral data
+    this.behavioralData.dashboardExitTime = Date.now();
+    const sessionDuration = this.behavioralData.dashboardExitTime - this.dashboardEntryTime;
+    
+    console.log('📊 Dashboard session completed:', {
+      duration: sessionDuration,
+      totalActions: this.behavioralData.actionCount
+    });
+    
+    // Keep tracking events but stop transmission
+    console.log('👂 Continuing to track behavioral events (no transmission)');
+    
+    // Emit dashboard exit event
+    window.dispatchEvent(new CustomEvent('dashboardBehavioralTrackingEnded', {
+      detail: {
+        sessionId: this.sessionId,
+        dashboardExitTime: this.behavioralData.dashboardExitTime,
+        sessionDuration: sessionDuration,
+        totalActions: this.behavioralData.actionCount
+      }
+    }));
+    }
+
+
 
   handleUrlChange(changeType, newUrl) {
     try {
       const now = Date.now();
       const timeSinceLastNav = now - this.lastNavigationTime;
 
-      const isDifferentPage = this.isDifferentPage(this.currentUrl, newUrl);
-      const isSignificantNavigation = timeSinceLastNav > 1000;
+      console.log('📄 URL Change detected:', {
+        changeType,
+        newUrl,
+        isMainDashboard: this.isMainDashboardUrl(),
+        wasOnDashboard: this.isOnMainDashboard
+      });
 
-      if (isDifferentPage && isSignificantNavigation) {
-        console.log('🔄 RESETTING BEHAVIORAL DATA due to page navigation');
-        this.resetBehavioralDataForNewPage(changeType, newUrl);
-      } else {
-        console.log('⏭️ Skipping reset - same page or rapid navigation');
+      const nowOnDashboard = newUrl.includes('/auth-user');
+      const wasOnDashboard = this.isOnMainDashboard;
+
+      // Check if user just entered the main dashboard
+      if (!wasOnDashboard && nowOnDashboard) {
+        console.log('🏠 DASHBOARD ENTRY DETECTED via URL change!');
+        this.handleDashboardEntry(this.userId);
+      }
+      
+      // Check if user left the dashboard
+      if (wasOnDashboard && !nowOnDashboard) {
+        console.log('🚪 Left dashboard');
+        this.isOnMainDashboard = false;
       }
 
       this.currentUrl = newUrl;
@@ -2052,6 +2244,27 @@ startImmediateContinuousTransmission() {
     }
   }
 
+
+
+  updateCurrentPage(newUrl) {
+    const now = Date.now();
+    const previousPage = this.behavioralData.currentPage;
+    
+    // Extract page name from URL
+    let pageName = 'unknown';
+    try {
+      const url = new URL(newUrl);
+      pageName = url.pathname.split('/').filter(p => p).join('_') || 'home';
+    } catch (error) {
+      console.warn('Could not parse URL for page name:', error);
+    }
+    
+    this.behavioralData.currentPage = pageName;
+    this.behavioralData.pageLoadTime = now;
+    
+    console.log(`📄 Page updated: ${previousPage} → ${pageName}`);
+  }
+
   isDifferentPage(oldUrl, newUrl) {
     try {
       if (!oldUrl || !newUrl) return true;
@@ -2060,53 +2273,17 @@ startImmediateContinuousTransmission() {
       const newParsed = new URL(newUrl);
 
       if (oldParsed.hostname !== newParsed.hostname) return true;
-
       if (oldParsed.pathname !== newParsed.pathname) return true;
-
       if (oldParsed.search !== newParsed.search) return true;
 
       return false;
-
     } catch (error) {
       console.error('❌ Error comparing URLs:', error);
       return true;
     }
   }
 
-  resetBehavioralDataForNewPage(navigationType, newUrl) {
-  try {
-    console.log('🔄 RESETTING BEHAVIORAL DATA FOR NEW PAGE');
 
-    const wasBackendTransmissionActive = this.backendIntervalId !== null;
-    
-    this.stopTracking();
-
-    // Clear old data
-    localStorage.removeItem('behavioral_data_auth_session');
-    // ... other localStorage.removeItem calls ...
-
-    // Reset behavioral arrays
-    this.behavioralData.cursorMovements = [];
-    this.behavioralData.cursorSpeeds = [];
-    // ... other array resets ...
-
-    this.behavioralData.actionCount = 0;
-    this.behavioralData.currentPage = newUrl;
-    this.behavioralData.pageLoadTime = Date.now();
-
-    this.startGlobalTracking();
-    this.setupPeriodicSaving();
-
-    // START TRANSMISSION IMMEDIATELY - NO BASELINE WAIT
-    if (this.userId && this.userLifecycleState === 'logged_in') {
-      console.log('🚀 Starting immediate transmission for new page...');
-      this.startContinuousTransmission();
-    }
-
-  } catch (error) {
-    console.error('❌ Error resetting behavioral data:', error);
-  }
-}
   createRollingWindows(windowSize = 10, stepSize = 5) {
     try {
       console.log('🔬 Creating rolling windows for cosine similarity analysis...');
@@ -2400,38 +2577,38 @@ startImmediateContinuousTransmission() {
   }
 
     getBehavioralData() {
-    this.updateCrossPageMetrics();
     return { ...this.behavioralData };
   }
 
 
   clearSession() {
-    console.log('🧹 Starting session clear - resetting all behavioral data...');
-    console.log('Before clear - microPauses length:', this.behavioralData.microPauses?.length || 0);
-    console.log('Before clear - hesitationTimes length:', this.behavioralData.hesitationTimes?.length || 0);
-    console.log('Before clear - mouseJitter length:', this.behavioralData.mouseJitter?.length || 0);
+    console.log('🧹 Clearing behavioral session...');
     
-    this.removeAllEventListeners();
-
-    if (this.backendIntervalId) {
-      clearInterval(this.backendIntervalId);
-      this.backendIntervalId = null;
-      console.log('🛑 Cleared backend interval');
-    }
+    this.stopTracking();
 
     localStorage.removeItem(this.STORAGE_KEY);
     localStorage.removeItem(this.SESSION_KEY);
+    localStorage.removeItem(this.USER_LIFECYCLE_KEY);
 
+    // Reset all state
+    this.isRegistrationPhase = false;
+    this.baselineCollectionActive = false;
+    this.registrationStartTime = null;
+    this.dashboardEntryTime = null;
+    this.logoutTimestamp = null;
+    this.userId = null;
+    this.userLifecycleState = 'anonymous';
+    
+    // Reset behavioral data
     this.behavioralData = {
       sessionId: null,
       trackingStartTime: null,
       pageLoadTime: null,
-
-      isCollectingBaseline: false,
-      baselineCollectionStartTime: null,
-      baselineCompleted: false,
-      baselineBehaviorData: null,
-
+      isRegistrationPhase: false,
+      registrationStartTime: null,
+      baselineCollectionActive: false,
+      baselineStartTime: null,
+      baselineEndTime: null,
       cursorMovements: [],
       cursorSpeeds: [],
       cursorAcceleration: [],
@@ -2455,43 +2632,20 @@ startImmediateContinuousTransmission() {
       hesitationTimes: [],
       keyboardPatterns: [],
       suspiciousPatterns: [],
-      postPasteActivity: {
-        keypressAfterPaste: 0
-      },
+      postPasteActivity: { keypressAfterPaste: 0 },
       deviceFingerprint: null,
-      canvasMetrics: {
-        winding: null,
-        geometryLength: 0,
-        textLength: 0,
-        hash: null
-      },
+      canvasMetrics: { winding: null, geometryLength: 0, textLength: 0, hash: null },
       missingCanvasFingerprint: true,
       unusualScreenResolution: {
-        width_height: "0x0",
-        inner_width: 0,
-        device_pixel_ratio: 0,
-        is_unusual: false,
-        spoofedMismatch: false,
-        aspectRatio: 0,
+        width_height: "0x0", inner_width: 0, device_pixel_ratio: 0,
+        is_unusual: false, spoofedMismatch: false, aspectRatio: 0,
       },
-      gpuInfo: {
-        vendor: 'Unknown',
-        model: 'Unknown'
-      },
+      gpuInfo: { vendor: 'Unknown', model: 'Unknown' },
       timingMetrics: {
-        trackingStartTime: null,
-        domContentLoaded: null,
-        pageLoadComplete: null,
-        navigationStart: null,
-        firstPaint: null,
-        mouseMovementFrequency: 0,
-        keyPressFrequency: 0,
-        clickFrequency: 0,
-        pageLoadTime: null,
-        timeToFirstClick: 0,
-        lastKeyPress: null,
-        lastMouseMove: null,
-        lastClick: null
+        trackingStartTime: null, domContentLoaded: null, pageLoadComplete: null,
+        navigationStart: null, firstPaint: null, mouseMovementFrequency: 0,
+        keyPressFrequency: 0, clickFrequency: 0, pageLoadTime: null,
+        timeToFirstClick: 0, lastKeyPress: null, lastMouseMove: null, lastClick: null
       },
       currentPage: null,
       honeypotValue: "",
@@ -2499,399 +2653,199 @@ startImmediateContinuousTransmission() {
     };
 
     this.isTracking = false;
-
+    console.log('✅ Session cleared successfully');
   }
 
-  forceResetSession() {
-    console.log('🔄 Force resetting behavioral session...');
-    this.clearSession();
-    this.createNewSession();
-    console.log('✅ Session force reset complete');
+
+
+  handleUserLogout() {
+    console.log('🚪 USER LOGOUT: Processing logout and baseline data');
+    
+    const logoutTime = Date.now();
+    this.logoutTimestamp = logoutTime;
+    
+    // Update behavioral data with logout info
+    this.behavioralData.logoutTimestamp = logoutTime;
+    this.behavioralData.baselineEndTime = logoutTime;
+    
+    // Calculate session duration
+    const sessionDuration = this.dashboardEntryTime ? 
+      (logoutTime - this.dashboardEntryTime) : 0;
+    
+    console.log('📊 Session completed:', {
+      sessionDuration: sessionDuration,
+      totalActions: this.behavioralData.actionCount,
+      auth_type: this.auth_type,
+      userId: this.userId,
+      dataPoints: {
+        cursorMovements: this.behavioralData.cursorMovements.length,
+        keyPresses: this.behavioralData.keyPressTimes.length,
+        clicks: this.behavioralData.clickTimestamps.length,
+        scrollEvents: this.behavioralData.scrollSpeeds.length
+      }
+    });
+    
+    // Stop behavioral data collection
+    this.baselineCollectionActive = false;
+    this.behavioralData.baselineCollectionActive = false;
+    
+    // Stop transmission if active (for direct login users)
+    this.stopContinuousTransmission();
+    
+    // CRITICAL: Only send baseline data for registration users
+    if (this.auth_type === true && this.behavioralData.actionCount > 0) {
+      console.log('📤 REGISTRATION USER LOGOUT: Sending baseline data to backend');
+      console.log('🎯 Target endpoint: (baseline storage)');
+      console.log('📊 Data collected during silent baseline collection period');
+      console.log('📊 Final baseline data summary:', {
+        sessionId: this.sessionId,
+        userId: this.userId,
+        auth_type: this.auth_type,
+        actionCount: this.behavioralData.actionCount,
+        collectionDuration: sessionDuration,
+        dataPoints: {
+          cursorMovements: this.behavioralData.cursorMovements?.length || 0,
+          keyPresses: this.behavioralData.keyPressTimes?.length || 0,
+          clicks: this.behavioralData.clickTimestamps?.length || 0,
+          scrollEvents: this.behavioralData.scrollSpeeds?.length || 0,
+          mouseJitter: this.behavioralData.mouseJitter?.length || 0,
+          hesitations: this.behavioralData.hesitationTimes?.length || 0,
+          microPauses: this.behavioralData.microPauses?.length || 0
+        }
+      });
+      
+      return this.sendBaselineDataToBackend()
+        .then((result) => {
+          console.log('✅ Baseline data sent successfully:', result);
+          
+          // Emit logout event with success
+          window.dispatchEvent(new CustomEvent('userLogoutTracking', {
+            detail: {
+              sessionId: this.sessionId,
+              logoutTime: logoutTime,
+              sessionDuration: sessionDuration,
+              totalActions: this.behavioralData.actionCount,
+              baselineCollected: true,
+              baselineSent: true,
+              dataCollected: true,
+              auth_type: this.auth_type,
+              success: true
+            }
+          }));
+          
+          return {
+            sessionId: this.sessionId,
+            logoutTime: logoutTime,
+            sessionDuration: sessionDuration,
+            dataCollected: true,
+            baselineSent: true,
+            auth_type: this.auth_type,
+            success: true
+          };
+        })
+        .catch((error) => {
+          console.error('❌ Failed to send baseline data:', error);
+          
+          // Emit logout event with error
+          window.dispatchEvent(new CustomEvent('userLogoutTracking', {
+            detail: {
+              sessionId: this.sessionId,
+              logoutTime: logoutTime,
+              sessionDuration: sessionDuration,
+              totalActions: this.behavioralData.actionCount,
+              baselineCollected: true,
+              baselineSent: false,
+              dataCollected: true,
+              auth_type: this.auth_type,
+              success: false,
+              error: error.message
+            }
+          }));
+          
+          return {
+            sessionId: this.sessionId,
+            logoutTime: logoutTime,
+            sessionDuration: sessionDuration,
+            dataCollected: true,
+            baselineSent: false,
+            auth_type: this.auth_type,
+            success: false,
+            error: error.message
+          };
+        });
+    } else if (this.auth_type === false) {
+      console.log('🔄 DIRECT LOGIN USER: No baseline data to send (was using real-time analysis)');
+    } else {
+      console.warn('⚠️ No behavioral data collected or auth_type not set');
+    }
+    
+    // Update lifecycle state
+    this.userLifecycleState = 'logged_out';
+    this.saveUserLifecycleState();
+    
+    // Emit logout event for non-registration users
+    window.dispatchEvent(new CustomEvent('userLogoutTracking', {
+      detail: {
+        sessionId: this.sessionId,
+        logoutTime: logoutTime,
+        sessionDuration: sessionDuration,
+        totalActions: this.behavioralData.actionCount,
+        baselineCollected: false,
+        baselineSent: false,
+        dataCollected: this.behavioralData.actionCount > 0,
+        auth_type: this.auth_type,
+        success: true
+      }
+    }));
+    
+    return {
+      sessionId: this.sessionId,
+      logoutTime: logoutTime,
+      sessionDuration: sessionDuration,
+      dataCollected: this.behavioralData.actionCount > 0,
+      baselineSent: false,
+      auth_type: this.auth_type,
+      success: true
+    };
+  }
+
+  userLoggedOut() {
+    return this.handleUserLogout();
   }
 
   updateBehavioralData(updates) {
     this.behavioralData = { ...this.behavioralData, ...updates };
+    console.log('Behavioral data updated:', Object.keys(updates));
   }
 
-
-   startImmediateBaselineCollection() {
-  console.log('📊 Skipping baseline collection - starting immediate transmission');
-  
-  // Set baseline as immediately completed
-  this.behavioralData.isCollectingBaseline = false;
-  this.behavioralData.baselineCompleted = true;
-  this.behavioralData.continuousTransmissionStarted = false;
-  
-  // Start transmission immediately without any delay
-  this.startContinuousTransmission();
-  
-  return 0; // No duration, immediate start
-}
-
-  completeImmediateBaselineCollection() {
-    if (!this.behavioralData.isCollectingBaseline) {
-      console.log('⚠️ Baseline already completed or not collecting');
-      return;
-    }
-
-    if (this.baselineTimerId) {
-      clearTimeout(this.baselineTimerId);
-      this.baselineTimerId = null;
-    }
-    this.behavioralData.baselineTimerId = null;
-
-    this.behavioralData.isCollectingBaseline = false;
-    this.behavioralData.baselineCompleted = true;
-    this.behavioralData.baselineBehaviorData.collectionEndTime = Date.now();
-    this.behavioralData.baselineBehaviorData.baselineQuality = 'completed';
-
-    const collectionDuration = this.behavioralData.baselineBehaviorData.collectionEndTime -
-      this.behavioralData.baselineBehaviorData.collectionStartTime;
-
-    console.log(`⏰ IMMEDIATE BASELINE: Collection completed in ${collectionDuration / 1000} seconds`);
-    console.log(`📊 Current page: ${this.behavioralData.currentPage || 'unknown'} (collection ran across all pages)`);
-
-    localStorage.setItem('global_baseline_completed', JSON.stringify({
-      completedAt: Date.now(),
-      sessionId: this.sessionId,
-      duration: collectionDuration,
-      trigger: 'url_manual_entry_immediate',
-      completedOnPage: this.behavioralData.currentPage || 'unknown'
-    }));
-
-    const baselineStats = this.validateImmediateBaselineData();
-    this.behavioralData.baselineBehaviorData.naturalBehaviorScore = baselineStats.qualityScore;
-
-    console.log(`📊 BASELINE QUALITY: Score ${baselineStats.qualityScore.toFixed(2)}, ${baselineStats.metrics.totalInteractions} total interactions`);
-
-    this.sendImmediateBaselineToBackend().then((result) => {
-      console.log('✅ IMMEDIATE BASELINE: Sent to backend successfully');
-      console.log('🔄 READY: System now ready for continuous behavioral analysis');
-      console.log('📡 STARTING CONTINUOUS TRANSMISSION: Now sending behavior data every 1 second');
-
-      this.startContinuousTransmission();
-
-      window.dispatchEvent(new CustomEvent('immediateBaselineCompleted', {
-        detail: {
-          baselineData: this.behavioralData.baselineBehaviorData,
-          sessionId: this.sessionId,
-          collectionDuration: collectionDuration,
-          trigger: 'url_manual_entry_immediate',
-          completedOnPage: this.behavioralData.currentPage || 'unknown',
-          silentMode: true,
-          backendResult: result
-        }
-      }));
-
-    }).catch((error) => {
-      console.error('❌ IMMEDIATE BASELINE: Backend send failed:', error);
-      console.log('🔄 STARTING CONTINUOUS TRANSMISSION: Despite baseline send error, starting behavioral analysis');
-
-      if (!this.backendIntervalId) {
-        this.startContinuousTransmission();
-        console.log('🚀 CONTINUOUS TRANSMISSION: Started despite baseline error');
-      }
-
-      window.dispatchEvent(new CustomEvent('immediateBaselineCompleted', {
-        detail: {
-          baselineData: this.behavioralData.baselineBehaviorData,
-          sessionId: this.sessionId,
-          error: error.message,
-          trigger: 'url_manual_entry_immediate',
-          completedOnPage: this.behavioralData.currentPage || 'unknown',
-          silentMode: true
-        }
-      }));
-    });
-  }
-
-  validateImmediateBaselineData() {
-    const data = this.behavioralData.baselineBehaviorData;
-    if (!data) {
-      return { qualityScore: 0, metrics: {} };
-    }
-
-    const metrics = {
-      mouseMovements: data.cursorMovements?.length || 0,
-      keyPresses: data.keyPressTimes?.length || 0,
-      clicks: data.clickTimestamps?.length || 0,
-      scrollEvents: data.scrollSpeeds?.length || 0,
-      totalInteractions: 0
-    };
-
-    metrics.totalInteractions = metrics.mouseMovements + metrics.keyPresses +
-      metrics.clicks + metrics.scrollEvents;
-
-    let qualityScore = 0;
-    if (metrics.totalInteractions > 0) qualityScore += 0.3;
-    if (metrics.mouseMovements > 5) qualityScore += 0.3;
-    if (metrics.keyPresses > 0) qualityScore += 0.2;
-    if (metrics.clicks > 0) qualityScore += 0.2;
-
-
-    return { qualityScore, metrics };
-  }
-
-  async sendImmediateBaselineToBackend() {
-    const baselineData = this.behavioralData.baselineBehaviorData;
-    if (!baselineData) {
-      throw new Error('No baseline data to send');
-    }
-
-
-    try {
-      const response = await fetch('http://127.0.0.1:8000/user/store-baseline-behavior/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: this.sessionId,
-          baseline_data: baselineData,
-          collection_trigger: 'url_manual_entry_immediate',
-          collection_duration: 20000,
-          baseline_type: 'immediate_url_entry_background',
-          data_quality_score: baselineData.naturalBehaviorScore || 0.5,
-          silent_collection: true,
-          background_mode: true,
-          cross_page_collection: true
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        console.log('✅ IMMEDIATE BASELINE: Backend storage successful');
-        console.log('🔄 READY: Behavioral analysis system now ready');
-        return result;
-      } else {
-        throw new Error(result.message || 'Backend storage failed');
-      }
-
-    } catch (error) {
-      console.error('❌ IMMEDIATE BASELINE: Backend send error:', error);
-      throw error;
-    }
-  }
-
-  completeBackgroundBaselineCollection() {
-    if (!this.behavioralData.isCollectingBaseline) {
-      return;
-    }
-
-    if (this.baselineTimerId) {
-      clearTimeout(this.baselineTimerId);
-      this.baselineTimerId = null;
-    }
-    this.behavioralData.baselineTimerId = null;
-
-    this.behavioralData.isCollectingBaseline = false;
-    this.behavioralData.baselineCompleted = true;
-    this.behavioralData.baselineBehaviorData.collectionEndTime = Date.now();
-
-    const baselineStats = this.validateBaselineData();
-
-    this.behavioralData.baselineBehaviorData.overallBehaviorProfile = this.generateComprehensiveBaselineProfile();
-
-    this.sendImmediateBaselineToBackend().then((result) => {
-      this.startContinuousTransmission();
-
-      window.dispatchEvent(new CustomEvent('backgroundBaselineCompleted', {
-        detail: {
-          baselineData: this.behavioralData.baselineBehaviorData,
-          sessionId: this.sessionId,
-          profileType: 'comprehensive_eagle_eye',
-          backendResult: result
-        }
-      }));
-    }).catch((error) => {
-      this.startContinuousTransmission();
-
-      window.dispatchEvent(new CustomEvent('backgroundBaselineCompleted', {
-        detail: {
-          baselineData: this.behavioralData.baselineBehaviorData,
-          sessionId: this.sessionId,
-          error: error.message
-        }
-      }));
-    });
-  }
-
-  validateBaselineData() {
-    if (!this.behavioralData.baselineBehaviorData) {
-      return {
-        mouseMovements: 0,
-        keyPresses: 0,
-        clicks: 0,
-        scrollEvents: 0,
-        totalActions: 0,
-        isValid: false,
-        reason: 'No baseline data exists'
-      };
-    }
-
-    const baseline = this.behavioralData.baselineBehaviorData;
-    const stats = {
-      mouseMovements: baseline.cursorMovements?.length || 0,
-      keyPresses: baseline.keyPressTimes?.length || 0,
-      clicks: baseline.clickTimestamps?.length || 0,
-      scrollEvents: baseline.scrollSpeeds?.length || 0,
-      totalActions: 0,
-      isValid: false,
-      reason: ''
-    };
-
-    stats.totalActions = stats.mouseMovements + stats.keyPresses + stats.clicks + stats.scrollEvents;
-
-    const minMouseMovements = 10; 
-    const minTotalActions = 15;   
-
-    if (stats.mouseMovements < minMouseMovements) {
-      stats.reason = `Insufficient mouse movements (${stats.mouseMovements} < ${minMouseMovements})`;
-    } else if (stats.totalActions < minTotalActions) {
-      stats.reason = `Insufficient total actions (${stats.totalActions} < ${minTotalActions})`;
-    } else {
-      stats.isValid = true;
-      stats.reason = 'Data quality is sufficient';
-    }
-
-    return stats;
-  }
-
-  generateComprehensiveBaselineProfile() {
-    if (!this.behavioralData.baselineBehaviorData) return null;
-
-    const baseline = this.behavioralData.baselineBehaviorData;
-    const totalDuration = baseline.collectionEndTime - baseline.collectionStartTime;
-
-
+  // Debug method to check current status
+  getCollectionStatus() {
     return {
-      mouseProfile: {
-        totalMovements: baseline.cursorMovements.length,
-        avgSpeed: baseline.cursorSpeeds.length > 0 ?
-          baseline.cursorSpeeds.reduce((a, b) => a + b, 0) / baseline.cursorSpeeds.length : 0,
-        speedVariance: this.calculateVariance(baseline.cursorSpeeds),
-        movementEntropy: this.calculatePathEntropy(baseline.cursorMovements),
-        hoverPatterns: baseline.hoverPatterns.length
+      auth_type: this.auth_type,
+      isRegistrationPhase: this.isRegistrationPhase,
+      baselineCollectionActive: this.baselineCollectionActive,
+      isTracking: this.isTracking,
+      transmissionActive: this.transmissionActive,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      actionCount: this.behavioralData?.actionCount || 0,
+      dataPoints: {
+        cursorMovements: this.behavioralData?.cursorMovements?.length || 0,
+        keyPresses: this.behavioralData?.keyPressTimes?.length || 0,
+        clicks: this.behavioralData?.clickTimestamps?.length || 0,
+        scrollEvents: this.behavioralData?.scrollSpeeds?.length || 0
       },
-
-      keyboardProfile: {
-        totalKeyPresses: baseline.keyPressTimes.length,
-        typingRhythm: this.calculateTypingRhythm(baseline.keyPressTimes),
-        keySequencePatterns: baseline.keySequences.length,
-        avgKeyInterval: this.calculateAvgKeyInterval(baseline.keyPressTimes)
-      },
-
-      clickProfile: {
-        totalClicks: baseline.clickTimestamps.length,
-        clickFrequency: baseline.clickTimestamps.length / (totalDuration / 1000),
-        doubleClickPatterns: baseline.doubleClickIntervals.length,
-        clickRhythm: this.calculateClickRhythm(baseline.clickTimestamps)
-      },
-
-      scrollProfile: {
-        totalScrolls: baseline.scrollSpeeds.length,
-        avgScrollSpeed: baseline.scrollSpeeds.length > 0 ?
-          baseline.scrollSpeeds.reduce((a, b) => a + b, 0) / baseline.scrollSpeeds.length : 0,
-        scrollPatterns: baseline.scrollPatterns.length,
-        scrollVariance: this.calculateVariance(baseline.scrollSpeeds)
-      },
-
-      navigationProfile: {
-        pagesVisited: baseline.pagesVisited.length,
-        pageTransitions: baseline.pageTransitions.length,
-        avgTimePerPage: baseline.timePerPage.length > 0 ?
-          baseline.timePerPage.reduce((a, b) => a + b, 0) / baseline.timePerPage.length : 0,
-        navigationPatterns: baseline.navigationPatterns.length
-      },
-
-      activityProfile: {
-        totalActions: baseline.actionCount,
-        actionsPerSecond: baseline.actionCount / (totalDuration / 1000),
-        activeTime: baseline.totalActiveTime,
-        idlePeriods: baseline.idlePeriods.length,
-        overallActivityLevel: this.calculateActivityLevel(baseline)
-      },
-
-      collectionMeta: {
-        duration: totalDuration,
-        startTime: baseline.collectionStartTime,
-        endTime: baseline.collectionEndTime,
-        profileType: 'comprehensive_eagle_eye',
-        dataQualityScore: this.calculateDataQualityScore(baseline)
-      }
+      userLifecycleState: this.userLifecycleState,
+      dashboardEntryTime: this.dashboardEntryTime
     };
   }
 
-startContinuousTransmission() {
-  if (this.behavioralData.continuousTransmissionStarted) {
-    console.log('⚠️ Transmission already active');
-    return;
-  }
 
-  if (this.backendIntervalId) {
-    console.log('⚠️ Backend interval already exists');
-    return;
-  }
-  
-  this.behavioralData.continuousTransmissionStarted = true;
-
-  // Send first payload immediately
-  this.sendToBackend();
-
-  // Start continuous transmission every 1 second
-  this.backendIntervalId = setInterval(() => {
-    this.sendToBackend();
-  }, this.backendInterval);
-
-  console.log('✅ Continuous transmission started immediately (every 1 second)');
-}
-
-// Call this method when user reaches main dashboard
-initiateDashboardBehavioralTracking(userId) {
-  if (!window.globalBehavioralTrackerInstance) {
-    console.error('❌ Global behavioral tracker not initialized');
-    return false;
-  }
-  
-  console.log('🎯 Initiating dashboard behavioral tracking for user:', userId);
-  
-  // Set current page to dashboard
-  window.globalBehavioralTrackerInstance.setCurrentPage('main_dashboard');
-  
-  // Start immediate dashboard tracking and transmission
-  const result = window.globalBehavioralTrackerInstance.handleDashboardEntryImmediate(userId);
-  
-  console.log('✅ Dashboard behavioral tracking initiated:', result);
-  
-  return result;
-}
-
-  stopContinuousTransmission() {
-    if (this.backendIntervalId) {
-      clearInterval(this.backendIntervalId);
-      this.backendIntervalId = null;
-      console.log('⏹️ Continuous transmission stopped');
-    }
-  }
-
-  ensureBackendTransmission() {
-    if (!this.backendIntervalId) {
-      console.log('🔧 Backend transmission not active, starting...');
-      this.startContinuousTransmission();
-    } else {
-      console.log('✅ Backend transmission is active');
-    }
-  }
 
   trackEvent(eventType, eventData) {
     const timestamp = Date.now();
 
     this.ensureArraysInitialized();
-
-    if (this.behavioralData.isCollectingBaseline && this.behavioralData.baselineBehaviorData) {
-      this.recordBaselineEvent(eventType, eventData, timestamp);
-    }
 
     switch (eventType) {
       case 'mouseMove':
@@ -2910,12 +2864,10 @@ initiateDashboardBehavioralTracking(userId) {
             const distance = Math.sqrt(
               Math.pow(movement.x - prev.x, 2) + Math.pow(movement.y - prev.y, 2)
             );
-            const timeDiff = (timestamp - prev.timestamp) / 1000; // Convert to seconds
+            const timeDiff = (timestamp - prev.timestamp) / 1000;
             const speed = timeDiff > 0 ? distance / timeDiff : 0;
 
             this.behavioralData.cursorSpeeds.push(speed);
-            this.behavioralData.latestSpeed = speed;
-            this.behavioralData.allSpeeds.push(speed);
           }
         }
         break;
@@ -2930,7 +2882,6 @@ initiateDashboardBehavioralTracking(userId) {
 
       case 'click':
         this.behavioralData.clickTimestamps.push(timestamp);
-        this.behavioralData.clickTimes.push(timestamp);
         this.behavioralData.lastClickTime = timestamp;
         break;
 
@@ -2948,16 +2899,6 @@ initiateDashboardBehavioralTracking(userId) {
       case 'paste':
         this.behavioralData.pasteDetected = true;
         this.behavioralData.pasteTimestamp = timestamp;
-
-        this.behavioralData.postPasteActivity = {
-          keyPresses: 0,
-          mouseMoves: 0,
-          clicks: 0,
-          timeToFirstAction: null,
-          timeToLastAction: null,
-          actionsAfterPaste: [],
-          clipboardContent: null,
-        };
         break;
 
       case 'input':
@@ -2984,13 +2925,90 @@ initiateDashboardBehavioralTracking(userId) {
     }
   }
 
+
+  forceResetSession() {
+    console.log('🔄 Force resetting behavioral session...');
+    this.clearSession();
+    this.createNewSession();
+    console.log('✅ Session force reset complete');
+  }
+
+  
+startContinuousTransmission() {
+    
+    // CRITICAL GUARD 1: Block transmission for registration users (auth_type = true)
+    if (this.auth_type === true) {
+      console.log('🔇 REGISTRATION USER (auth_type=true): BLOCKING continuous transmission');
+      return { blocked: true, reason: 'registration_user' };
+    }
+
+    if (this.userLifecycleState === 'registering' || this.isRegistrationPhase) {
+      console.log('🔇 User in registration phase - BLOCKING transmission');
+      return { blocked: true, reason: 'registration_phase' };
+    }
+      
+    if (!this.isMainDashboardUrl()) {
+      console.log('⚠️ Not on main dashboard - transmission not started');
+      return { blocked: true, reason: 'not_on_dashboard' };
+    }
+      
+    if (this.transmissionActive) {
+      console.log('⚠️ Transmission already active');
+      return { blocked: false, reason: 'already_active' };
+    }
+
+    if (this.backendIntervalId) {
+      console.log('⚠️ Backend interval already exists - clearing first');
+      clearInterval(this.backendIntervalId);
+      this.backendIntervalId = null;
+    }
+    
+    // Only set transmissionActive to true if all guards pass
+    this.transmissionActive = true;
+
+    
+    // Send first payload immediately
+    this.sendToBackend().then((result) => {
+      if (result && result.blocked) {
+        console.log('⚠️ First payload was blocked:', result.reason);
+        this.stopContinuousTransmission();
+        return;
+      }
+      console.log('✅ First behavioral payload sent successfully');
+    }).catch((error) => {
+      console.warn('⚠️ First payload failed, continuing transmission:', error);
+    });
+
+    // Start continuous transmission
+    this.backendIntervalId = setInterval(() => {
+      if (this.isMainDashboardUrl() && this.isOnMainDashboard) {
+        this.sendToBackend().then((result) => {
+          if (result && result.blocked) {
+            console.log('🛑 Transmission blocked:', result.reason);
+            this.stopContinuousTransmission();
+          }
+        }).catch(error => {
+          console.warn('⚠️ Backend transmission failed:', error.message);
+        });
+      } else {
+        console.log('⚠️ No longer on dashboard - stopping transmission');
+        this.stopContinuousTransmission();
+      }
+    }, this.backendInterval);
+
+    console.log('✅ Continuous transmission started (every 1 second)');
+    return { blocked: false, started: true };
+  }
+
+
+
+
   recordBaselineEvent(eventType, eventData, timestamp) {
     if (!this.behavioralData.isCollectingBaseline) {
       return; 
     }
 
     if (!this.behavioralData.baselineBehaviorData) {
-      console.error('🚨 BASELINE ERROR: baselineBehaviorData is null but isCollectingBaseline is true');
       return;
     }
 
@@ -3166,106 +3184,7 @@ initiateDashboardBehavioralTracking(userId) {
     return variance;
   }
 
-  calculatePathEntropy(movements) {
-    if (movements.length < 2) return 0;
-    let directionChanges = 0;
-    for (let i = 2; i < movements.length; i++) {
-      const prev = movements[i - 2];
-      const curr = movements[i - 1];
-      const next = movements[i];
-
-      const angle1 = Math.atan2(curr.y - prev.y, curr.x - prev.x);
-      const angle2 = Math.atan2(next.y - curr.y, next.x - curr.x);
-      const angleDiff = Math.abs(angle2 - angle1);
-
-      if (angleDiff > Math.PI / 4) directionChanges++;
-    }
-    return directionChanges / (movements.length - 2);
-  }
-
-  calculateTypingRhythm(keyPressTimes) {
-    if (keyPressTimes.length < 2) return 0;
-    const intervals = [];
-    for (let i = 1; i < keyPressTimes.length; i++) {
-      intervals.push(keyPressTimes[i] - keyPressTimes[i - 1]);
-    }
-    return this.calculateVariance(intervals);
-  }
-
-  calculateAvgKeyInterval(keyPressTimes) {
-    if (keyPressTimes.length < 2) return 0;
-    const totalInterval = keyPressTimes[keyPressTimes.length - 1] - keyPressTimes[0];
-    return totalInterval / (keyPressTimes.length - 1);
-  }
-
-  calculateClickRhythm(clickTimestamps) {
-    if (clickTimestamps.length < 2) return 0;
-    const intervals = [];
-    for (let i = 1; i < clickTimestamps.length; i++) {
-      intervals.push(clickTimestamps[i] - clickTimestamps[i - 1]);
-    }
-    return this.calculateVariance(intervals);
-  }
-
-  calculateActivityLevel(baseline) {
-    const duration = baseline.collectionEndTime - baseline.collectionStartTime;
-    const actionsPerSecond = baseline.actionCount / (duration / 1000);
-
-    // Activity level based on actions per second
-    if (actionsPerSecond > 5) return 'high';
-    if (actionsPerSecond > 2) return 'medium';
-    if (actionsPerSecond > 0.5) return 'low';
-    return 'very_low';
-  }
-
-  calculateDataQualityScore(baseline) {
-    let score = 0;
-    const maxScore = 100;
-
-    // Mouse data quality (25 points)
-    if (baseline.cursorMovements.length > 10) score += 25;
-    else score += (baseline.cursorMovements.length / 10) * 25;
-
-    // Keyboard data quality (25 points)
-    if (baseline.keyPressTimes.length > 5) score += 25;
-    else score += (baseline.keyPressTimes.length / 5) * 25;
-
-    // Click data quality (25 points)
-    if (baseline.clickTimestamps.length > 2) score += 25;
-    else score += (baseline.clickTimestamps.length / 2) * 25;
-
-    // Overall activity quality (25 points)
-    const activityScore = Math.min(baseline.actionCount / 20, 1) * 25;
-    score += activityScore;
-
-    return Math.round(score);
-  }
-
-  // Calculate baseline metrics for comparison
-  calculateBaselineMetrics() {
-    if (!this.behavioralData.baselineBehaviorData) return null;
-
-    const baseline = this.behavioralData.baselineBehaviorData;
-
-    const metrics = {
-      collectionDuration: baseline.collectionEndTime - baseline.collectionStartTime,
-      averageMouseSpeed: baseline.cursorSpeeds.length > 0 ?
-        baseline.cursorSpeeds.reduce((a, b) => a + b, 0) / baseline.cursorSpeeds.length : 0,
-      mouseMovementCount: baseline.cursorMovements.length,
-      keyPressCount: baseline.keyPressTimes.length,
-      clickCount: baseline.clickTimestamps.length,
-      scrollCount: baseline.scrollSpeeds.length,
-      actionsPerSecond: baseline.actionCount / ((baseline.collectionEndTime - baseline.collectionStartTime) / 1000),
-      mouseMovementFrequency: baseline.cursorMovements.length / ((baseline.collectionEndTime - baseline.collectionStartTime) / 1000),
-      keyPressFrequency: baseline.keyPressTimes.length / ((baseline.collectionEndTime - baseline.collectionStartTime) / 1000)
-    };
-
-    console.log('📊 Baseline metrics calculated:', metrics);
-    return metrics;
-  }
-
-  showAuthenticationMessage(message = 'Need for Authentication') {
-    // Create or update authentication modal/alert
+  showAuthenticationMessage(message = 'Authentication Required') {
     this.removeExistingAuthModal();
 
     const authModal = document.createElement('div');
@@ -3308,7 +3227,7 @@ initiateDashboardBehavioralTracking(userId) {
           color: #7f8c8d;
           margin: 0 0 25px 0;
           line-height: 1.5;
-        ">Suspicious behavior detected. Please verify your identity to continue.</p>
+        ">Unusual behavioral patterns detected. Please verify your identity.</p>
         <button onclick="this.parentElement.parentElement.remove()" style="
           background: #e74c3c;
           color: white;
@@ -3318,7 +3237,7 @@ initiateDashboardBehavioralTracking(userId) {
           font-size: 16px;
           cursor: pointer;
           transition: background 0.3s;
-        " onmouseover="this.style.background='#c0392b'" onmouseout="this.style.background='#e74c3c'">
+        ">
           Acknowledge
         </button>
       </div>
@@ -3361,8 +3280,121 @@ initiateDashboardBehavioralTracking(userId) {
     // Save unauthorized status
     this.saveToStorage();
   }
+
+  // Method for React components to call when user logs out
+  processLogoutAndSendBaseline() {
+    console.log('🚪 PROCESSING LOGOUT - Checking for baseline data to send');
+    
+    const status = this.getCollectionStatus();
+    console.log('📊 Current status before logout:', status);
+    
+    if (status.auth_type === true && status.actionCount > 0) {
+      console.log('📤 Registration user logging out - will send baseline data');
+      return this.handleUserLogout();
+    } else {
+      console.log('ℹ️ No baseline data to send (not a registration user or no data collected)');
+      return Promise.resolve({ status: 'no_baseline_data_to_send' });
+    }
+  }
+
+  // Test method for registration user flow
+  testRegistrationUserFlow(userId) {
+    console.log('🧪 TESTING: Registration user flow');
+    
+    // Set up as registration user
+    this.auth_type = true;
+    this.handleDashboardEntry(userId);
+    
+    // Check status
+    const status = this.getCollectionStatus();
+    console.log('🧪 Test result:', status);
+    
+    return status;
+  }
+
+  // Debug method to check current status
+  getCollectionStatus() {
+    return {
+      auth_type: this.auth_type,
+      isRegistrationPhase: this.isRegistrationPhase,
+      baselineCollectionActive: this.baselineCollectionActive,
+      isTracking: this.isTracking,
+      transmissionActive: this.transmissionActive,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      actionCount: this.behavioralData?.actionCount || 0,
+      dataPoints: {
+        cursorMovements: this.behavioralData?.cursorMovements?.length || 0,
+        keyPresses: this.behavioralData?.keyPressTimes?.length || 0,
+        clicks: this.behavioralData?.clickTimestamps?.length || 0,
+        scrollEvents: this.behavioralData?.scrollSpeeds?.length || 0
+      },
+      userLifecycleState: this.userLifecycleState,
+      dashboardEntryTime: this.dashboardEntryTime
+    };
+  }
+
+  // TEST FUNCTION - Call from browser console
+  testRegistrationFlow(testUserId = 'test-user-123') {
+    console.log('🧪 TESTING REGISTRATION FLOW');
+    console.log('👤 Test User ID:', testUserId);
+    
+    // Reset state
+    this.auth_type = true;
+    this.isRegistrationPhase = true;
+    this.userLifecycleState = 'registering';
+    
+    console.log('📊 Initial state:', {
+      isInitialized: this.isInitialized,
+      isTracking: this.isTracking,
+      auth_type: this.auth_type,
+      currentUrl: window.location.href
+    });
+    
+    // Test initialization
+    if (!this.isInitialized) {
+      console.log('🔧 Initializing tracker...');
+      this.init();
+    }
+    
+    // Test dashboard entry
+    console.log('📞 Testing startBaselineCollection...');
+    const result = this.startBaselineCollection(testUserId);
+    
+    // Test data collection after 3 seconds
+    setTimeout(() => {
+      console.log('🧪 DATA COLLECTION TEST RESULTS:');
+      const status = this.getCollectionStatus();
+      console.log('📊 Collection Status:', status);
+      
+      // Test mouse movement simulation
+      console.log('🖱️ Simulating mouse movement...');
+      const mockMouseEvent = {
+        clientX: Math.random() * 100,
+        clientY: Math.random() * 100
+      };
+      this.trackMouseMovement(mockMouseEvent);
+      
+      console.log('✅ Test completed. Check console for collection status.');
+    }, 3000);
+    
+    return {
+      message: 'Test started. Check console in 3 seconds for results.',
+      initialResult: result
+    };
+  }
 }
 
 const globalBehavioralTracker = new GlobalBehavioralTracker();
+
+// Expose globally for console testing
+if (typeof window !== 'undefined') {
+  window.globalBehavioralTracker = globalBehavioralTracker;
+  window.testBehavioralTracking = () => globalBehavioralTracker.testRegistrationFlow();
+  
+  console.log('🧪 DEBUG: Global tracker exposed. Test with:');
+  console.log('  window.testBehavioralTracking()');
+  console.log('  window.globalBehavioralTracker.getCollectionStatus()');
+}
 
 export default globalBehavioralTracker;

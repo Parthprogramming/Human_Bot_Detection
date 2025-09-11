@@ -43,6 +43,8 @@ Below are the metrics on the basis of which the Human and Bot are differentiated
     + timing_metrics,
     + evasion_signals
 (42)
+Detection Parameter : 
+1) No Cursor movements , Fast cursor movements , Straight cursor movements , Spoofed GPU's , Having GPU names as "Google Vulkan , Swift swader etc ", Missing canvas fingerprint , Honey pot value filled , More number of Bot indicators , Perfect cursor angles(Humans have unlinear cursor movements). 
 ---------------------------------------
 
 2) HTTP Client Bot detection below are the metrics on the basis of which HTTP CLIENT BOT are detected : 

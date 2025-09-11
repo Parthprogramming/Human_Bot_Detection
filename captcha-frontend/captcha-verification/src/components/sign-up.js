@@ -246,6 +246,8 @@ const Sign_Up = () => {
     navigate('/auth-user');
   };
 
+
+
   const [postPasteActivity, setPostPasteActivity] = useState(globalData.postPasteActivity || {
     keyPresses: 0,
     mouseMoves: 0,
@@ -395,11 +397,7 @@ const Sign_Up = () => {
   ]);
 
   // Add logout functionality to clear behavioral data
-  const handleLogout = () => {
-    clearBehavioralData();
-    // Add any other logout logic here
-    navigate('/'); // or wherever you want to redirect after logout
-  };
+
 
   // Effect to expose logout function globally (for use in other components)
   useEffect(() => {
@@ -2805,90 +2803,6 @@ useEffect(() => {
       const signUpResult = await signUpResponse.json();
       console.log("Sign-up result:", signUpResult);
 
-      // Continue with existing behavior analysis
-      const response = await fetch(
-        "http://localhost:8000/captchaApp/analyze-user/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            usai_id: usaiId.trim(),
-            user_name: userName.trim(),
-            behavior: behaviorData,
-            honeypot: honeypot,
-          }),
-        }
-      );
-
-      // Always show only the model prediction, never access denied
-      const predictResponse = await fetch(
-        "http://localhost:8000/captchaApp/predict-user-type/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            behavior: {
-              cursorMovements,
-              cursorSpeeds,
-              cursorCurvature,
-              cursorAcceleration,
-              keyPressTimes,
-              keyHoldTimes,
-              clickTimestamps,
-              clickTimes,
-              scrollSpeeds,
-              totalTimeToSubmit: Date.now() - pageLoadTime,
-              scrollChanges,
-              idleTime,
-              pasteDetected,
-              postPasteActivity,
-              keyboardPatterns,
-              suspiciousPatterns,
-              actionCount,
-              isAutomatedBrowser,
-              botFingerprintScore,
-              mouseMovementDebug: {
-                distance:
-                  latestSpeed > 0
-                    ? Math.sqrt(
-                        Math.pow(
-                          lastMouseMove?.x -
-                            cursorMovements[cursorMovements.length - 2]?.x || 0,
-                          2
-                        ) +
-                          Math.pow(
-                            lastMouseMove?.y -
-                              cursorMovements[cursorMovements.length - 2]?.y ||
-                              0,
-                            2
-                          )
-                      )
-                    : 0,
-                timeDiff: lastMouseMove?.timestamp || 0,
-                dx:
-                  lastMouseMove?.x -
-                    cursorMovements[cursorMovements.length - 2]?.x || 0,
-                dy:
-                  lastMouseMove?.y -
-                    cursorMovements[cursorMovements.length - 2]?.y || 0,
-                currentSpeed: latestSpeed,
-              },
-              speedCalculationDebug: {
-                rawSpeed: latestSpeed,
-                filteredSpeed: latestSpeed,
-                latestSpeed: latestSpeed,
-              },
-              tabkeyCount: TabKeyCount,
-              cursorAngle: [...cursorAngles],
-              mouseJitter: [...mouseJitter],
-              microPauses: [...microPauses],
-              hesitationTimes: [...hesitationTimes],
-            },
-          }),
-        }
-      );
-
-      const predictResult = await predictResponse.json();
       
       let statusMessage = '';
       if (signUpResult.success) {
@@ -2897,7 +2811,6 @@ useEffect(() => {
         statusMessage = `⚠️ Registration issue: ${signUpResult.message} `;
       }
       
-      statusMessage += `🤖 Classification: ${predictResult.classification} (Confidence: ${predictResult.confidence}%)`;
       
       setMessage(statusMessage);
       setIsBlocked(false); 

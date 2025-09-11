@@ -163,127 +163,219 @@ def sign_up(request):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["POST","GET"])
 def sign_in(request):
     """
-    Handle user sign-in requests from sign-in.js
-    Authenticates user and stores attempt in SignInAttempt table
+    Handle user sign-in requests using USAI ID + Name authentication
     """
     try:
         data = json.loads(request.body)
         
         usai_id = data.get('usai_id', '').strip()
-        password = data.get('password', '')
-        username = data.get('username', usai_id)  
+        user_name = data.get('user_name', '').strip()
+        behavior_data = data.get('behavior', {})
+        honeypot = data.get('honeypot', '').strip()
         
         session_id = str(uuid.uuid4())
-        
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
         
-        if not all([usai_id, password]):
-            error_msg = "Missing required fields: usai_id and password"
-            
-            SignInAttempt.objects.create(
-                session_id=session_id,
-                usai_id=usai_id,
-                success=False,
-                error_message=error_msg,
-                ip_address=ip_address,
-                user_agent=user_agent
-            )
-            
+        # Check honeypot for bot detection
+        if honeypot:
+            error_msg = "Suspicious activity detected"
             return JsonResponse({
                 'success': False,
                 'message': error_msg,
                 'session_id': session_id
             }, status=400)
         
-        user = None
-        user_profile = None
-        name = None
+        # Validate required fields
+        if not usai_id:
+            error_msg = "USAI ID is required"
+            return JsonResponse({
+                'success': False,
+                'message': error_msg,
+                'session_id': session_id
+            }, status=400)
+        
+        if not user_name:
+            error_msg = "Name is required"
+            return JsonResponse({
+                'success': False,
+                'message': error_msg,
+                'session_id': session_id
+            }, status=400)
+        
+        authenticated_user = None
+        stored_name = ""
+        signup_record = None
         
         try:
-            user_profile = UserProfile.objects.get(usai_id=usai_id)
-            user = user_profile.user
-            name = f"{user.first_name} {user.last_name}".strip() or user.username
-        except UserProfile.DoesNotExist:
-            try:
-                user = User.objects.get(username=username)
-                try:
-                    user_profile = user.profile
-                    name = f"{user.first_name} {user.last_name}".strip() or user.username
-                except AttributeError:
-                    name = f"{user.first_name} {user.last_name}".strip() or user.username
-            except User.DoesNotExist:
-                error_msg = f"User with USAI ID '{usai_id}' not found"
+            # Import your SignUpAttempt model (replace 'your_app' with actual app name)
+            from user.models import SignUpAttempt
+            
+            # Look for successful signup with matching USAI ID
+            signup_record = SignUpAttempt.objects.filter(
+                usai_id=usai_id,
+                success=True
+            ).first()
+            
+            if signup_record:
+                stored_name = signup_record.name.strip()
                 
-                SignInAttempt.objects.create(
-                    session_id=session_id,
-                    usai_id=usai_id,
-                    success=False,
-                    error_message=error_msg,
-                    ip_address=ip_address,
-                    user_agent=user_agent
-                )
+                # Verify name matches (case-insensitive)
+                if stored_name.lower() == user_name.lower():
+                    # Check if signup record has linked user
+                    if hasattr(signup_record, 'user') and signup_record.user:
+                        authenticated_user = signup_record.user
+                    else:
+                        # Create Django user if it doesn't exist
+                        from django.contrib.auth.models import User
+                        try:
+                            authenticated_user = User.objects.get(username=usai_id)
+                        except User.DoesNotExist:
+                            # Create new user
+                            authenticated_user = User.objects.create_user(
+                                username=usai_id,
+                                first_name=user_name.split()[0] if user_name.split() else user_name,
+                                last_name=' '.join(user_name.split()[1:]) if len(user_name.split()) > 1 else ''
+                            )
+                            # Link the user to signup record if possible
+                            if hasattr(signup_record, 'user'):
+                                signup_record.user = authenticated_user
+                                signup_record.save()
+                else:
+                    error_msg = f"Name '{user_name}' does not match stored name '{stored_name}' for USAI ID '{usai_id}'"
+                    
+                    # Log failed attempt
+                    try:
+                        from user.models import SignInAttempt
+                        SignInAttempt.objects.create(
+                            session_id=session_id,
+                            usai_id=usai_id,
+                            name=user_name,
+                            user=signup_record.user if hasattr(signup_record, 'user') and signup_record.user else None,
+                            success=False,
+                            error_message=error_msg,
+                            ip_address=ip_address,
+                            user_agent=user_agent
+                        )
+                    except:
+                        pass  # Don't fail if SignInAttempt model doesn't exist
+                    
+                    return JsonResponse({
+                        'success': False,
+                        'message': error_msg,
+                        'session_id': session_id
+                    }, status=401)
+            else:
+                # No successful signup found with this USAI ID
+                error_msg = f"User with USAI ID '{usai_id}' not found. Please check your USAI ID or register first."
+                
+                # Log failed attempt
+                try:
+                    from user.models import SignInAttempt
+                    SignInAttempt.objects.create(
+                        session_id=session_id,
+                        usai_id=usai_id,
+                        name=user_name,
+                        success=False,
+                        error_message=error_msg,
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+                except:
+                    pass  # Don't fail if SignInAttempt model doesn't exist
                 
                 return JsonResponse({
                     'success': False,
                     'message': error_msg,
                     'session_id': session_id
                 }, status=404)
+                
+        except ImportError:
+            # SignUpAttempt model doesn't exist, fall back to User model
+            from django.contrib.auth.models import User
+            try:
+                authenticated_user = User.objects.get(username=usai_id)
+                user_full_name = f"{authenticated_user.first_name} {authenticated_user.last_name}".strip()
+                stored_name = user_full_name if user_full_name else authenticated_user.username
+                
+                if stored_name.lower() != user_name.lower():
+                    error_msg = f"Name does not match for USAI ID '{usai_id}'"
+                    return JsonResponse({
+                        'success': False,
+                        'message': error_msg,
+                        'session_id': session_id
+                    }, status=401)
+                    
+            except User.DoesNotExist:
+                error_msg = f"User with USAI ID '{usai_id}' not found"
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg,
+                    'session_id': session_id
+                }, status=404)
         
-        authenticated_user = authenticate(request, username=user.username, password=password)
-        
-        if authenticated_user is not None:
-            # Login successful
+        if authenticated_user:
+            # Authentication successful
             login(request, authenticated_user)
             
-            # Create user session
-            user_session = UserSession.objects.create(
-                session_id=session_id,
-                name=name,
-                usai_id=usai_id,
-                session_type='SIGNIN',
-                ip_address=ip_address,
-                user_agent=user_agent
-            )
+            # Create user session record if model exists
+            try:
+                from user.models import UserSession
+                UserSession.objects.create(
+                    session_id=session_id,
+                    name=stored_name,
+                    usai_id=usai_id,
+                    session_type='SIGNIN',
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+            except:
+                pass 
             
-            SignInAttempt.objects.create(
-                session_id=session_id,
-                name=name,
-                usai_id=usai_id,
-                user=authenticated_user,
-                success=True,
-                ip_address=ip_address,
-                user_agent=user_agent
-            )
+            try:
+                from user.models import SignInAttempt
+                SignInAttempt.objects.create(
+                    session_id=session_id,
+                    name=stored_name,
+                    usai_id=usai_id,
+                    user=authenticated_user,
+                    success=True,
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+            except:
+                pass  
             
+            if behavior_data:
+                try:
+                    from user.models import BehavioralData
+                    BehavioralData.objects.create(
+                        session_id=session_id,
+                        user=authenticated_user,
+                        usai_id=usai_id,
+                        behavior_json=json.dumps(behavior_data),
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+                except:
+                    pass  # Don't fail if BehavioralData model doesn't exist
             
             return JsonResponse({
                 'success': True,
-                'message': 'Login successful',
+                'message': 'Authentication successful',
                 'session_id': session_id,
                 'user_id': authenticated_user.id,
                 'usai_id': usai_id,
-                'name': name,
-                'username': authenticated_user.username
+                'name': stored_name,
+                'username': authenticated_user.username,
+                'redirect_url': '/auth-user/'
             }, status=200)
         
         else:
-            error_msg = "Invalid password"
-            
-            SignInAttempt.objects.create(
-                session_id=session_id,
-                name=name,
-                usai_id=usai_id,
-                user=user,
-                success=False,
-                error_message=error_msg,
-                ip_address=ip_address,
-                user_agent=user_agent
-            )
-            
+            error_msg = "Authentication failed"
             return JsonResponse({
                 'success': False,
                 'message': error_msg,
@@ -291,45 +383,24 @@ def sign_in(request):
             }, status=401)
             
     except json.JSONDecodeError:
-        error_msg = "Invalid JSON data"
-        session_id = str(uuid.uuid4())
-        
-        SignInAttempt.objects.create(
-            session_id=session_id,
-            usai_id='',
-            success=False,
-            error_message=error_msg,
-            ip_address=get_client_ip(request),
-            user_agent=request.META.get('HTTP_USER_AGENT', '')
-        )
-        
         return JsonResponse({
             'success': False,
-            'message': error_msg,
-            'session_id': session_id
+            'message': "Invalid request data",
+            'session_id': str(uuid.uuid4())
         }, status=400)
     
     except Exception as e:
-        error_msg = f"Internal server error: {str(e)}"
-        session_id = str(uuid.uuid4())
-        
-        SignInAttempt.objects.create(
-            session_id=session_id,
-            usai_id=data.get('usai_id', '') if 'data' in locals() else '',
-            success=False,
-            error_message=error_msg,
-            ip_address=get_client_ip(request),
-            user_agent=request.META.get('HTTP_USER_AGENT', '')
-        )
-        
-        logger.error(f"Sign-in error: {str(e)}")
+        # Log the error for debugging
+        print(f"Authentication error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         
         return JsonResponse({
             'success': False,
-            'message': 'Internal server error',
-            'session_id': session_id
+            'message': "An error occurred during authentication",
+            'session_id': str(uuid.uuid4())
         }, status=500)
-
+        
 is_authorized = False
 class BehavioralAnalyzer:
    
@@ -816,19 +887,18 @@ class BehavioralAnalyzer:
             print(f"   Domain scores - Time: {time_series_score:.3f}, Statistical: {statistical_score:.3f}")
             print(f"   Domain scores - Boolean: {boolean_score:.3f}, Device: {device_score:.3f}")
 
-            # More balanced and realistic weighting
             weights = {
-                'time_series': 0.40,    # Primary behavioral indicator
-                'statistical': 0.35,    # Secondary behavioral indicator  
-                'boolean': 0.15,        # Security flags (reduced impact)
-                'device': 0.10          # Environment consistency (minimal impact)
+                'time_series': 0.40,    
+                'statistical': 0.35,    
+                'boolean': 0.15,        
+                'device': 0.10          
             }
 
-            # Apply realistic minimum floors - users shouldn't fail on single domain
-            time_series_score = max(0.45, time_series_score)   # Increased floor
-            statistical_score = max(0.45, statistical_score)    # Increased floor
-            boolean_score = max(0.60, boolean_score)            # Higher floor for security
-            device_score = max(0.50, device_score)              # Minimal impact floor
+           
+            time_series_score = max(0.45, time_series_score)   
+            statistical_score = max(0.45, statistical_score)   
+            boolean_score = max(0.60, boolean_score)           
+            device_score = max(0.50, device_score)             
 
             final_score = (
                 weights['time_series'] * time_series_score +
@@ -1327,7 +1397,6 @@ class BehavioralAnalyzer:
         
         return risk_factors    
         
-    
     def simple_behavioral_validation(self, session_id, current_data, user_id=None):
         """Simple validation for new users or when baseline is unavailable"""
         try:
@@ -1432,9 +1501,7 @@ class BehavioralAnalyzer:
             return self._fallback_analysis(current_data, str(e))
         
 
-
 behavioral_analyzer = BehavioralAnalyzer()
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -1612,12 +1679,6 @@ def handle_baseline_storage(request):
 @require_http_methods(["POST"])
 def analyze_behavioral_data(request):
     """Fixed version with proper risk_factors handling"""
-    
-    def ensure_risk_factors(analysis_result):
-        """Ensure analysis_result always has risk_factors key"""
-        if 'risk_factors' not in analysis_result:
-            analysis_result['risk_factors'] = []
-        return analysis_result
     
     try:
         data = json.loads(request.body)
@@ -1830,7 +1891,6 @@ def analyze_behavioral_data(request):
             }
 
             
-            # Add compatibility fields for frontend
             analysis_result.update({
                 'analysis_type': 'improved_user_identity_detection',
                 'session_id': session_id,

@@ -2,13 +2,153 @@ import { useState, useEffect, useRef, useMemo, use } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { useNavigate } from 'react-router-dom';
 import "./captcha-form.css";
+import globalBehavioralTracker from '../utils/globalBehavioralTracker';
 
 
+const BEHAVIORAL_DATA_KEY = 'behavioral_data_session';
+
+function showRegistrationPrompt(message) {
+    // Remove any existing modals
+    const existingModal = document.querySelector('.auth-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Create modal prompting user to register
+    const modal = document.createElement('div');
+    modal.className = 'auth-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    modal.innerHTML = `
+        <div class="auth-content" style="
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        ">
+            <h3 style="margin-bottom: 15px; color: #333;">Account Not Found</h3>
+            <p style="margin-bottom: 15px; color: #666;">${message}</p>
+            <p style="margin-bottom: 25px; color: #666;">Please register first to access the system.</p>
+            <button onclick="window.location.href='/register/'" style="
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                margin-right: 10px;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Register Now</button>
+            <button onclick="this.closest('.auth-modal').remove()" style="
+                background: #6c757d;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Cancel</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function showErrorMessage(message) {
+    // Remove any existing error messages
+    const existingError = document.getElementById('error-message');
+    if (existingError) {
+        existingError.remove();
+    }
+    
+    // Show error for invalid credentials
+    const errorDiv = document.createElement('div');
+    errorDiv.id = 'error-message';
+    errorDiv.textContent = message || 'An error occurred. Please try again.';
+    errorDiv.style.cssText = `
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    `;
+    
+    // Insert error message at the top of the form
+    const form = document.querySelector('form');
+    if (form) {
+        form.insertBefore(errorDiv, form.firstChild);
+    } else {
+        // Fallback: add to body if no form found
+        document.body.insertBefore(errorDiv, document.body.firstChild);
+    }
+    
+    // Auto-remove error after 5 seconds
+    setTimeout(() => {
+        if (errorDiv && errorDiv.parentNode) {
+            errorDiv.remove();
+        }
+    }, 5000);
+}
+
+const saveBehavioralData = (data) => {
+  try {
+    localStorage.setItem(BEHAVIORAL_DATA_KEY, JSON.stringify(data));
+    console.log('✅ Legacy behavioral data saved to localStorage');
+  } catch (error) {
+    console.error('Error saving behavioral data:', error);
+  }
+};
+
+const loadBehavioralData = () => {
+  try {
+    const savedData = localStorage.getItem(BEHAVIORAL_DATA_KEY);
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      console.log('📋 Legacy behavioral data loaded from localStorage:', Object.keys(parsedData).length, 'properties');
+      return parsedData;
+    }
+    console.log('🆕 No saved legacy behavioral data found');
+    return null;
+  } catch (error) {
+    console.error('Error loading behavioral data:', error);
+    return null;
+  }
+};
+
+const clearBehavioralData = () => {
+  try {
+    localStorage.removeItem(BEHAVIORAL_DATA_KEY);
+    console.log('🧹 Legacy behavioral data cleared from localStorage');
+  } catch (error) {
+    console.error('Error clearing behavioral data:', error);
+  }
+};
 
 const Sign_In = () => {
+  
+  const savedData = loadBehavioralData() || {};
+  const globalData = globalBehavioralTracker.getBehavioralData();
   const prevpoint = useRef(null);
   const [usaiId, setUsaiId] = useState("");
   const [userName, setUserName] = useState("");
+
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+
   const [cursorMovements, setCursorMovements] = useState([]);
   const [cursorSpeeds, setCursorSpeeds] = useState([]);
   const [cursorAcceleration, setCursorAcceleration] = useState([]);
@@ -44,7 +184,9 @@ const Sign_In = () => {
 
   const navigate = useNavigate();
 
-  // 🔄 Initialize behavioral tracking reset for sign-in page
+  
+
+  
   useEffect(() => {
     console.log('🚀 SIGN-IN page mounted - checking behavioral tracker state');
     
@@ -61,8 +203,9 @@ const Sign_In = () => {
   }, []);
 
   const AuthUser = (e) => {
-    navigate('/auth-user');
-  };
+  e.preventDefault();
+  submitForm(e);
+};
 
   const [postPasteActivity, setPostPasteActivity] = useState({
     keyPresses: 0,
@@ -151,26 +294,18 @@ const Sign_In = () => {
       gl.FRAGMENT_SHADER,
       gl.HIGH_FLOAT
     );
-    // Collect max texture size
     const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    // Collect max renderbuffer size
     const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-    // Collect anti-aliasing info
     const antialias = gl.getContextAttributes().antialias;
-    // Collect max vertex attribs
     const maxVertexAttribs = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
-    // Collect max varying vectors
     const maxVaryingVectors = gl.getParameter(gl.MAX_VARYING_VECTORS);
-    // Collect max vertex uniform vectors
     const maxVertexUniformVectors = gl.getParameter(
       gl.MAX_VERTEX_UNIFORM_VECTORS
     );
-    // Collect max fragment uniform vectors
     const maxFragmentUniformVectors = gl.getParameter(
       gl.MAX_FRAGMENT_UNIFORM_VECTORS
     );
 
-    // Timing test: render a large texture
     let timing = null;
     try {
       const start = performance.now();
@@ -2298,6 +2433,8 @@ useEffect(() => {
     }
   };
 
+  
+
  
 
   const detectAutomationPatterns = () => {
@@ -2322,249 +2459,132 @@ useEffect(() => {
 
   // Modify submitForm to include automation pattern detection
   const submitForm = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    // More strict automated browser check
-    const automationPatterns = detectAutomationPatterns();
-    const isAutomated =
-      automationPatterns.length > 0 || botFingerprintScore > 0.7; // Lower threshold
+  // Validation checks
+  if (!userName.trim()) {
+    showErrorMessage("Please enter your name");
+    return;
+  }
 
-    if (isAutomated) {
-      // Log bot detection results only once here
-      if (botDetectionResults) {
-        console.log("=== BOT DETECTION RESULTS ===");
-        console.log(
-          "Bot Fingerprint Score:",
-          botDetectionResults.botFingerprintScore
-        );
-        console.log(
-          "Automation Flags Detected:",
-          botDetectionResults.automationFlagsDetected
-        );
-        console.log(
-          "Suspicious Features:",
-          botDetectionResults.suspiciousFeatureCount,
-          "out of",
-          botDetectionResults.totalFeatures
-        );
-        console.log(
-          "Suspicious Feature Ratio:",
-          botDetectionResults.suspiciousFeatureRatio
-        );
-        console.log("===========================");
-      }
+  if (!usaiId.trim()) {
+    showErrorMessage("Please enter the USAI ID");
+    return;
+  }
 
-      console.log("Automation patterns detected:", automationPatterns);
-      setMessage("Automated browser detected! Access denied.");
-      setIsBlocked(true);
-      return;
-    }
+  if (honeypot.trim()) {
+    showErrorMessage("Suspicious activity detected!");
+    return;
+  }
 
-    if (!userName.trim()) {
-      setMessage("Please enter your name");
-      setIsBlocked(true);
-      return;
-    }
+  setIsAuthenticating(true);
+  setAuthError("");
 
-    if (!usaiId.trim()) {
-      setMessage("Please enter the USAI ID");
-      setIsBlocked(true);
-      return;
-    }
-
-    if (honeypot.trim()) {
-      setMessage("Suspicious activity detected!");
-      setIsBlocked(true);
-      return;
-    }
-
-    // Extract additional fingerprint features
-
-    const behaviorData = {
-      cursorMovements: [...cursorMovements],
-      cursorSpeeds: [...cursorSpeeds],
-      cursorCurvature: [...cursorCurvature],
-      cursorAcceleration: [...cursorAcceleration],
-      keyPressTimes: [...keyPressTimes],
-      keyHoldTimes: [...keyHoldTimes],
-      clickTimes: [...clickTimes],
-      clickTimestamps: [...clickTimestamps],
-      scrollSpeeds: [...scrollSpeeds],
-      totalTimeToSubmit: Date.now() - pageLoadTime,
-      scrollChanges,
-      idleTime,
-      pasteDetected,
-      postPasteActivity,
-      keyboardPatterns,
-      suspiciousPatterns,
-      actionCount,
-      isAutomatedBrowser,
-      cursorEntropy: cursorEntropy,
-      botFingerprintScore,
-      mouseMovementDebug: {
-        distance:
-          latestSpeed > 0
-            ? Math.sqrt(
-                Math.pow(
-                  lastMouseMove?.x -
-                    cursorMovements[cursorMovements.length - 2]?.x || 0,
-                  2
-                ) +
-                  Math.pow(
-                    lastMouseMove?.y -
-                      cursorMovements[cursorMovements.length - 2]?.y || 0,
-                    2
-                  )
-              )
-            : 0,
-        timeDiff: lastMouseMove?.timestamp || 0,
-        dx:
-          lastMouseMove?.x - cursorMovements[cursorMovements.length - 2]?.x ||
-          0,
-        dy:
-          lastMouseMove?.y - cursorMovements[cursorMovements.length - 2]?.y ||
-          0,
-        currentSpeed: latestSpeed,
-      },
-      speedCalculationDebug: {
-        rawSpeed: latestSpeed,
-        filteredSpeed: latestSpeed,
-        latestSpeed: latestSpeed,
-      },
-      tabkeyCount: TabKeyCount,
-      cursorAngle: [...cursorAngles],
-      mouseJitter: [...mouseJitter],
-      microPauses: [...microPauses],
-      hesitationTimes: [...hesitationTimes],
-      deviceFingerprint: deviceFingerprint,
-      missing_canvas_fingerprint: missingCanvasFingerprint,
-      canvas_metrics: canvasMetrics,
- 
-      unusualScreenResolution: unusualScreenResolution,
-      gpuInformation: gpuInfo,
-      timingMetrics,
-      evasionSignals: {
-        idleResumeAngularJerk: idleResumeAngularJerk,
-        thermalHoverNoise: thermalHoverNoise,
-        hoverPositions: [...hoverPositions],
-        deviation_angle: fittsDeviationScore,
-        acceleration_variance: accelerationVariance,
-        path_entropy: pathEntropy,
-        cursor_micro_jitter: cursorMicroJitter,
-      },
-    };
-
-    // Log the extracted fingerprint features as part of behaviorData
-    console.log("Behavior Data:\n" + JSON.stringify(behaviorData, null, 2));
-
-    const totalSubmitTime = Date.now() - pageLoadTime;
-    setSubmitTime(totalSubmitTime);
-
-    try {
-      console.log("Sending request to backend...");
-      const response = await fetch(
-        "http://localhost:8000/captchaApp/analyze-user/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            usai_id: usaiId.trim(),
-            user_name: userName.trim(),
-            behavior: behaviorData,
-            honeypot: honeypot,
-          }),
-        }
-      );
-
-      // Always show only the model prediction, never access denied
-      const predictResponse = await fetch(
-        "http://localhost:8000/captchaApp/predict-user-type/",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            behavior: {
-              cursorMovements,
-              cursorSpeeds,
-              cursorCurvature,
-              cursorAcceleration,
-              keyPressTimes,
-              keyHoldTimes,
-              clickTimestamps,
-              clickTimes,
-              scrollSpeeds,
-              totalTimeToSubmit: Date.now() - pageLoadTime,
-              scrollChanges,
-              idleTime,
-              pasteDetected,
-              postPasteActivity,
-              keyboardPatterns,
-              suspiciousPatterns,
-              actionCount,
-              isAutomatedBrowser,
-              botFingerprintScore,
-              mouseMovementDebug: {
-                distance:
-                  latestSpeed > 0
-                    ? Math.sqrt(
-                        Math.pow(
-                          lastMouseMove?.x -
-                            cursorMovements[cursorMovements.length - 2]?.x || 0,
-                          2
-                        ) +
-                          Math.pow(
-                            lastMouseMove?.y -
-                              cursorMovements[cursorMovements.length - 2]?.y ||
-                              0,
-                            2
-                          )
-                      )
-                    : 0,
-                timeDiff: lastMouseMove?.timestamp || 0,
-                dx:
-                  lastMouseMove?.x -
-                    cursorMovements[cursorMovements.length - 2]?.x || 0,
-                dy:
-                  lastMouseMove?.y -
-                    cursorMovements[cursorMovements.length - 2]?.y || 0,
-                currentSpeed: latestSpeed,
-              },
-              speedCalculationDebug: {
-                rawSpeed: latestSpeed,
-                filteredSpeed: latestSpeed,
-                latestSpeed: latestSpeed,
-              },
-              tabkeyCount: TabKeyCount,
-              cursorAngle: [...cursorAngles],
-              mouseJitter: [...mouseJitter],
-              microPauses: [...microPauses],
-              hesitationTimes: [...hesitationTimes],
-            },
-          }),
-        }
-      );
-
-      const predictResult = await predictResponse.json();
-      setMessage(
-        `🤖 Classification: ${predictResult.classification} (Confidence: ${predictResult.confidence}%)`
-      );
-      setIsBlocked(false); // Never block the UI, always show prediction
-      
-      // Navigate to dashboard only if user is classified as Human
-      if (predictResult.classification === 'Human') {
-        // Add a small delay to show the result before navigating
-        setTimeout(() => {
-          navigate('/auth-user');
-        }, 2000); // 2 second delay to show the result
-      }
-    } catch (error) {
-      console.error("Error during submission:", error);
-      setMessage("Error verifying user.");
-    }
+  // Collect behavioral data for analysis
+  const behaviorData = {
+    cursorMovements: [...cursorMovements],
+    cursorSpeeds: [...cursorSpeeds],
+    cursorCurvature: [...cursorCurvature],
+    cursorAcceleration: [...cursorAcceleration],
+    keyPressTimes: [...keyPressTimes],
+    keyHoldTimes: [...keyHoldTimes],
+    clickTimes: [...clickTimes],
+    clickTimestamps: [...clickTimestamps],
+    scrollSpeeds: [...scrollSpeeds],
+    totalTimeToSubmit: Date.now() - pageLoadTime,
+    scrollChanges,
+    idleTime,
+    pasteDetected,
+    postPasteActivity,
+    keyboardPatterns,
+    suspiciousPatterns,
+    actionCount,
+    isAutomatedBrowser,
+    cursorEntropy: cursorEntropy,
+    botFingerprintScore,
+    tabkeyCount: TabKeyCount,
+    cursorAngle: [...cursorAngles],
+    mouseJitter: [...mouseJitter],
+    microPauses: [...microPauses],
+    hesitationTimes: [...hesitationTimes],
+    deviceFingerprint: deviceFingerprint,
+    missing_canvas_fingerprint: missingCanvasFingerprint,
+    canvas_metrics: canvasMetrics,
+    unusualScreenResolution: unusualScreenResolution,
+    gpuInformation: gpuInfo,
+    timingMetrics,
+    evasionSignals: {
+      idleResumeAngularJerk: idleResumeAngularJerk,
+      thermalHoverNoise: thermalHoverNoise,
+      hoverPositions: [...hoverPositions],
+      deviation_angle: fittsDeviationScore,
+      acceleration_variance: accelerationVariance,
+      path_entropy: pathEntropy,
+      cursor_micro_jitter: cursorMicroJitter,
+    },
   };
 
-  // Add mouse jitter, micro-pauses, and hesitation pattern feature collection to the frontend. These are tracked in state and included in the behavior data sent to the backend.
-  // Mouse Jitter & Micro-pauses calculation
+  try {
+    console.log("Attempting sign-in with USAI ID authentication...");
+    
+
+    const response = await fetch("http://127.0.0.1:8000/user/signin/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        usai_id: usaiId.trim(),
+        user_name: userName.trim()
+      }),
+    });
+
+    const data = await response.json();
+    console.log('Sign-in response:', data);
+    
+    if (data.success) {
+      // Store user session info
+      localStorage.setItem('userSession', JSON.stringify({
+        sessionId: data.session_id,
+        userId: data.user_id,
+        usaiId: data.usai_id,
+        name: data.name,
+        username: data.username
+      }));
+      
+      // Initialize behavioral tracking for logged-in user
+      if (window.globalBehavioralTrackerInstance) {
+        window.globalBehavioralTrackerInstance.handleUserLogin(
+          data.user_id, 
+          {
+            usaiId: data.usai_id,
+            name: data.name,
+            sessionId: data.session_id
+          }
+        );
+      }
+      
+      // Show success message briefly then redirect
+      setMessage("Authentication successful! Redirecting to dashboard...");
+      setTimeout(() => {
+        window.location.href = data.redirect_url || '/auth-user/';
+      }, 1500);
+      
+    } else {
+      // Handle authentication failure
+      if (data.message && data.message.includes('not found')) {
+        showRegistrationPrompt(data.message);
+      } else {
+        showErrorMessage(data.message || 'Authentication failed. Please check your credentials.');
+      }
+    }
+
+  } catch (error) {
+    console.error('Sign-in error:', error);
+    showErrorMessage('Network error occurred. Please try again.');
+  } finally {
+    setIsAuthenticating(false);
+  }
+};
+
   useEffect(() => {
     let lastMoveTime = Date.now();
     let lastPoint = null;
@@ -2664,8 +2684,9 @@ useEffect(() => {
 
   // Check if both fields have content to enable the verify button
   const isFormValid = useMemo(() => {
-    return userName.trim().length > 0 && usaiId.trim().length > 0;
-  }, [userName, usaiId]);
+  return userName.trim().length > 0 && usaiId.trim().length > 0;
+}, [userName, usaiId]);
+
 
   return (
     <div className="form-container">
@@ -2689,20 +2710,22 @@ useEffect(() => {
         placeholder="Enter USAI ID"
         id={InputId2}
       />
+
+      
       <button 
-        onClick={AuthUser} 
-        id={buttonId}
-        disabled={!isFormValid}
-        style={{
-          backgroundColor: isFormValid ? '#4CAF50' : '#cccccc',
-          color: isFormValid ? 'white' : '#666666',
-          cursor: isFormValid ? 'pointer' : 'not-allowed',
-          opacity: isFormValid ? 1 : 0.6,
-          transition: 'all 0.3s ease'
-        }}
-      >
-        Verify
-      </button>
+  onClick={submitForm}
+  id={buttonId}
+  disabled={!isFormValid || isAuthenticating}
+  style={{
+    backgroundColor: (isFormValid && !isAuthenticating) ? '#4CAF50' : '#cccccc',
+    color: (isFormValid && !isAuthenticating) ? 'white' : '#666666',
+    cursor: (isFormValid && !isAuthenticating) ? 'pointer' : 'not-allowed',
+    opacity: (isFormValid && !isAuthenticating) ? 1 : 0.6,
+    transition: 'all 0.3s ease'
+  }}
+>
+  {isAuthenticating ? 'Verifying...' : 'Sign In'}
+</button>
 
       <p className={isBlocked ? "error-message" : ""}>{message}</p>
 
