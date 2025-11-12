@@ -1423,39 +1423,9 @@ this.isInitialized = false;
         }
       });
       
-      const response = await fetch('http://127.0.0.1:8000/user/store-baseline-behavior/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ IMMEDIATE baseline data stored successfully in backend');
-        console.log('📊 Backend response:', {
-          status: result.status || 'success',
-          message: result.message || 'Immediate baseline data stored',
-          baselineId: result.baseline_id || null,
-          timestamp: result.timestamp || null
-        });
-        return result;
-      } else {
-        const errorText = await response.text();
-        const errorDetail = response.status === 422 ? 
-          'Validation error - check payload format' : 
-          `HTTP ${response.status}`;
-        
-        console.error('❌ Failed to store immediate baseline data:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        });
-        
-        throw new Error(`${errorDetail}: ${errorText}`);
-      }
+      
+      
     } catch (error) {
       console.error('❌ Network error sending immediate baseline data:', {
         message: error.message,
