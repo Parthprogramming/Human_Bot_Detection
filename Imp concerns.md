@@ -1,6 +1,2 @@
-1) How to handle users who will use only tab to fill USAI ID and submit the form ?
-2) Is there any concers for copy paste situation ?
 
-modify and shold be able to calculate the scroll speeds
-including the tab key functionality
-
+1) To import it in the different different files and use it , And Ensure that the user behavior is sustaining after navigating throughout the pages , 

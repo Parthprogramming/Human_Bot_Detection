@@ -1,5 +1,68 @@
 class GlobalBehavioralTracker {
-  constructor() {
+  constructor(config = {}) {
+
+   
+    this.config = {
+      dashboardPatterns: config.dashboardPatterns || [],
+      apiEndpoints: {
+        baselineStorage: config.apiEndpoints?.baselineStorage || null,
+        realtimeAnalysis: config.apiEndpoints?.realtimeAnalysis || null,
+      },
+      logoutButtonSelectors: config.logoutButtonSelectors || [
+        'button[onclick*="logout"]',
+        'a[href*="logout"]',
+        '.logout-button',
+        '#logout-btn',
+        '[data-action="logout"]'
+      ],
+      logoutButtonTexts: config.logoutButtonTexts || ['logout', 'log out', 'sign out'],
+      apiHeaders: config.apiHeaders || {},
+      includeCredentials: config.includeCredentials !== undefined ? config.includeCredentials : true,
+      enableConsoleLogging: config.enableConsoleLogging !== undefined ? config.enableConsoleLogging : true,
+      transmissionInterval: config.transmissionInterval || 1000,
+      saveInterval: config.saveInterval || 2000,
+      
+      // NEW: Storage keys configuration
+      storageKeys: {
+        data: config.storageKeys?.data || 'global_behavioral_data',
+        session: config.storageKeys?.session || 'global_behavioral_session',
+        lifecycle: config.storageKeys?.lifecycle || 'user_lifecycle_state'
+      },
+      
+      // NEW: Event names configuration
+      events: {
+        signup: config.events?.signup || 'userSignupTracking',
+        logout: config.events?.logout || 'userLogoutTracking',
+        dashboardEntry: config.events?.dashboardEntry || 'dashboardEntryTracking'
+      },
+      
+      // NEW: Feature toggles
+      features: {
+        trackMouse: config.features?.trackMouse !== undefined ? config.features.trackMouse : true,
+        trackKeyboard: config.features?.trackKeyboard !== undefined ? config.features.trackKeyboard : true,
+        trackClicks: config.features?.trackClicks !== undefined ? config.features.trackClicks : true,
+        trackScroll: config.features?.trackScroll !== undefined ? config.features.trackScroll : true,
+        trackPaste: config.features?.trackPaste !== undefined ? config.features.trackPaste : true,
+        deviceFingerprinting: config.features?.deviceFingerprinting !== undefined ? config.features.deviceFingerprinting : true
+      },
+      
+      // NEW: Lifecycle hooks
+      hooks: {
+        beforeInit: config.hooks?.beforeInit || null,
+        afterInit: config.hooks?.afterInit || null,
+        beforeSend: config.hooks?.beforeSend || null,
+        afterSend: config.hooks?.afterSend || null
+      },
+      
+      // NEW: Error handling
+      onError: config.onError || null,
+      onTransmissionError: config.onTransmissionError || null,
+      
+      // NEW: Page name resolver
+      pageNameResolver: config.pageNameResolver || null
+   
+  }
+    
     if (window.globalBehavioralTrackerInstance) {
       console.warn('⚠️ Multiple GlobalBehavioralTracker instances detected!');
       console.warn('Existing instance:', window.globalBehavioralTrackerInstance);
@@ -12,7 +75,7 @@ class GlobalBehavioralTracker {
       console.log(`📄 Setting current page: ${pageName}`);
       currentPage = pageName;
     };
-
+  
 this.isInitialized = false;
     this.sessionId = null;
     this.trackingStartTime = null;
@@ -41,10 +104,9 @@ this.isInitialized = false;
     this.loginTimestamp = null;
     this.logoutTimestamp = null;
     this.baselineTimerId = null;
-    this.STORAGE_KEY = 'global_behavioral_data';
-    this.SESSION_KEY = 'global_behavioral_session';
-    this.USER_LIFECYCLE_KEY = 'user_lifecycle_state';
-   
+ this.STORAGE_KEY = this.config.storageKeys.data;
+this.SESSION_KEY = this.config.storageKeys.session;
+this.USER_LIFECYCLE_KEY = this.config.storageKeys.lifecycle;
     this.behavioralData = {
       sessionId: null,
       trackingStartTime: null,
@@ -146,6 +208,18 @@ this.isInitialized = false;
       setTimeout(() => this.init(), 0);
     }
   }
+
+  log(level, message, data = null) {
+    if (!this.config.enableConsoleLogging) return;
+    
+    if (data !== null) {
+      console[level](message, data);
+    } else {
+      console[level](message);
+    }
+  }
+
+
   getSessionStats() {
   const now = Date.now();
 
@@ -168,8 +242,18 @@ this.isInitialized = false;
   init() {
     if (this.isInitialized) return;
 
+    if (this.config.hooks.beforeInit) {
+      try {
+        this.config.hooks.beforeInit(this);
+      } catch (error) {
+        this.log('error', '❌ Error in beforeInit hook:', error);
+      }
+    }
+
     const currentAuthType = this.auth_type;
     this.loadUserLifecycleState();
+
+    this.isInitialized = true;
     
     if (currentAuthType !== false && this.auth_type !== currentAuthType) {
       console.log('🔒 Preserving explicitly set auth_type:', currentAuthType, 'over loaded value:', this.auth_type);
@@ -192,31 +276,44 @@ this.isInitialized = false;
     this.setupPeriodicSaving();
     this.setupUnloadHandler();
     this.setupNavigationDetection();
-    this.setupLogoutButtonListener();
 
     this.isInitialized = true;
+
+    if (this.config.hooks.afterInit) {
+      try {
+        this.config.hooks.afterInit(this);
+      } catch (error) {
+        this.log('error', '❌ Error in afterInit hook:', error);
+      }
+    }
   }
   isMainDashboardUrl() {
+    if (this.config.dashboardPatterns.length === 0) {
+      if (this.config.enableConsoleLogging) {
+        console.warn('⚠️ No dashboard patterns configured. Assuming current page is valid.');
+      }
+      return true; // Default to true if no patterns specified
+    }
     const currentUrl = window.location.href;
     console.log('🔍 Checking dashboard URL:', currentUrl);
     
-    // Check for multiple possible dashboard URLs
-    const dashboardPatterns = [
-      'http://localhost:3000/auth-user',
-      '/auth-user',
-      'localhost:3000/dashboard',
-      '/dashboard',
-      'localhost:3000/main',
-      '/main',
-      'localhost:3000/',
-      'localhost:3000'
-    ];
+    if (this.config.enableConsoleLogging) {
+      console.log('🔍 Checking dashboard URL:', currentUrl);
+    }
     
-    const matches = dashboardPatterns.some(pattern => currentUrl.includes(pattern));
-    console.log('📍 Dashboard URL patterns checked:', dashboardPatterns);
-    console.log('✅ URL match result:', matches);
     
-    return matches || currentUrl.includes('localhost:3000'); // Fallback for any localhost:3000 URL
+    const matches = this.config.dashboardPatterns.some(pattern => {
+      if (pattern instanceof RegExp) {
+        return pattern.test(currentUrl);
+      }
+      return currentUrl.includes(pattern);
+    });
+    
+    if (this.config.enableConsoleLogging) {
+    console.log('🔍 Dashboard URL check:', { currentUrl, matches });
+  }
+  
+  return matches;
   }
 
 
@@ -374,7 +471,7 @@ this.isInitialized = false;
     console.log('⏰ Tracking start time:', new Date(this.signupTimestamp).toLocaleString());
     
     // Emit signup event
-    window.dispatchEvent(new CustomEvent('userSignupTracking', {
+    window.dispatchEvent(new CustomEvent(this.config.events.signup, {
       detail: {
         userId: this.userId,
         sessionId: this.sessionId,
@@ -431,7 +528,6 @@ this.isInitialized = false;
     // CRITICAL: Enable data collection flag for tracking functions
     this.behavioralData.isCollectingBaseline = true;
     
-    // CRITICAL: Initialize baselineBehaviorData object for recordBaselineEvent function
     this.behavioralData.baselineBehaviorData = {
       cursorMovements: [],
       cursorSpeeds: [],
@@ -489,8 +585,6 @@ this.isInitialized = false;
     
     // Save state and set up logout listener
     this.saveUserLifecycleState();
-    this.setupLogoutButtonListener();
-    
 
 
     console.log('� Baseline collection status:', baselineResult);
@@ -566,7 +660,7 @@ this.isInitialized = false;
     }
     
     if (this.userId && this.userId !== userId) {
-      console.warn('⚠️ User ID mismatch during dashboard entry');
+      this.log('warn', '⚠️ User ID mismatch during dashboard entry');
     }
 
     const isRegistrationUser = (this.auth_type === true) || 
@@ -576,7 +670,7 @@ this.isInitialized = false;
     console.log('🔍 DECISION: isRegistrationUser =', isRegistrationUser);
     
     if (isRegistrationUser) {
-      console.log('📊 FLOW STEP 1: handleDashboardEntry calling startRegistrationPhase');
+this.log('log', '📊 FLOW STEP 1: handleDashboardEntry calling startRegistrationPhase');
       
       // FLOW STEP 1->2: Call startRegistrationPhase which will handle baseline collection
       const registrationResult = this.startRegistrationPhase(userId);
@@ -590,7 +684,7 @@ this.isInitialized = false;
       // FLOW STEP 6: Send baseline data to backend via required API
       console.log('� Sending baseline data to backend...');
       // Make the HTTP call asynchronous to avoid blocking dashboard navigation
-      this.sendBaselineDataToBackend(registrationResult)
+      this.sendDataToBackend(registrationResult)
         .then(result => {
           console.log('✅ Baseline data sent successfully:', result);
         })
@@ -625,7 +719,6 @@ this.isInitialized = false;
       this.dashboardUrl = window.location.href;
       
       // Reset behavioral data for fresh baseline collection
-      this.resetBehavioralArraysForBaseline();
       
       // Start baseline collection for direct login users
       this.baselineCollectionActive = true;
@@ -800,6 +893,33 @@ this.isInitialized = false;
 
     this.isTracking = true;
 
+    if (this.config.features.trackMouse) {
+      const handleMouseMove = (event) => this.trackMouseMovement(event);
+      this.addEventListener(document, 'mousemove', handleMouseMove);
+    }
+    
+    if (this.config.features.trackKeyboard) {
+      const handleKeyDown = (event) => this.trackKeyDown(event);
+      const handleKeyUp = (event) => this.trackKeyUp(event);
+      this.addEventListener(document, 'keydown', handleKeyDown);
+      this.addEventListener(document, 'keyup', handleKeyUp);
+    }
+    
+    if (this.config.features.trackClicks) {
+      const handleClick = (event) => this.trackClick(event);
+      this.addEventListener(document, 'click', handleClick);
+    }
+    
+    if (this.config.features.trackScroll) {
+      const handleScroll = (event) => this.trackScroll(event);
+      this.addEventListener(window, 'scroll', handleScroll);
+    }
+    
+    if (this.config.features.trackPaste) {
+      const handlePaste = (event) => this.trackPaste(event);
+      this.addEventListener(document, 'paste', handlePaste);
+    }
+
     const handleMouseMove = (event) => this.trackMouseMovement(event);
     const handleKeyDown = (event) => this.trackKeyDown(event);
     const handleKeyUp = (event) => this.trackKeyUp(event);
@@ -963,7 +1083,6 @@ this.isInitialized = false;
 
     // PRIORITY: Handle baseline collection for registration users
     if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
-      this.recordBaselineEvent('mouseMove', event, now);
       // Also record to main behavioral data for registration users
       this.behavioralData.cursorMovements.push(newPoint);
       this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
@@ -1142,7 +1261,6 @@ this.isInitialized = false;
     
     // PRIORITY: Handle baseline collection for registration users
     if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
-      this.recordBaselineEvent('keyDown', event, now);
       // Also record to main behavioral data
       this.behavioralData.lastKeyDown[event.key] = now;
       this.behavioralData.keyPressTimes.push(now);
@@ -1195,7 +1313,6 @@ this.isInitialized = false;
 
     // PRIORITY: Handle baseline collection for registration users
     if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
-      this.recordBaselineEvent('click', event, now);
       // Also record to main behavioral data
       this.behavioralData.clickTimestamps.push(now);
       this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
@@ -1221,7 +1338,6 @@ this.isInitialized = false;
 
     // PRIORITY: Handle baseline collection for registration users
     if (this.behavioralData.isCollectingBaseline && this.auth_type === true) {
-      this.recordBaselineEvent('scroll', event, now);
       this.behavioralData.actionCount = (this.behavioralData.actionCount || 0) + 1;
       this.behavioralData.lastActionTime = now;
       return;
@@ -1307,12 +1423,11 @@ this.isInitialized = false;
 
   }
 
-  setupPeriodicSaving() {
-    setInterval(() => {
-      this.saveToStorage();
-    }, this.saveInterval);
-  }
-
+setupPeriodicSaving() {
+  setInterval(() => {
+    this.saveToStorage();
+  }, this.config?.saveInterval || this.saveInterval);
+}
   saveToStorage() {
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.behavioralData));
@@ -1322,7 +1437,7 @@ this.isInitialized = false;
   }
 
   
-  async sendBaselineDataToBackend(registrationResult) {
+  async sendDataToBackend(registrationResult) {
     console.log('📤 IMMEDIATE BASELINE SEND: Sending registration baseline data to backend');
     console.log('🎯 Registration result:', registrationResult);
     
@@ -1424,7 +1539,32 @@ this.isInitialized = false;
       });
       
       
+      if (!this.config.apiEndpoints.baselineStorage) {
+        console.warn('⚠️ No baseline storage endpoint configured');
+        return { warning: 'No endpoint configured', payload };
+      }
+
+      const response = await fetch(this.config.apiEndpoints.baselineStorage, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.apiHeaders || {})
+        },
+        body: JSON.stringify(payload),
+        credentials: this.config.includeCredentials ? 'include' : 'same-origin'
+      });
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (this.config.enableConsoleLogging) {
+        console.log('✅ Baseline data sent successfully:', result);
+      }
+      
+      return result;
       
     } catch (error) {
       console.error('❌ Network error sending immediate baseline data:', {
@@ -1458,25 +1598,6 @@ this.isInitialized = false;
     this.behavioralData.dashboardUrl = this.dashboardUrl;
     
     console.log('✅ Dashboard properties configured');
-  }
-
-  
-  calculateBaselineQualityMetrics() {
-    const totalTime = this.behavioralData.baselineEndTime - this.behavioralData.baselineStartTime;
-    
-    return {
-      totalDurationMs: totalTime,
-      totalActions: this.behavioralData.actionCount,
-      actionsPerSecond: this.behavioralData.actionCount / (totalTime / 1000),
-      mouseMovements: (this.behavioralData.cursorMovements || []).length,
-      keyPresses: (this.behavioralData.keyPressTimes || []).length,
-      clicks: (this.behavioralData.clickTimestamps || []).length,
-      scrollEvents: (this.behavioralData.scrollSpeeds || []).length,
-      averageSpeed: this.calculateAverageSpeed(),
-      jitterEvents: (this.behavioralData.mouseJitter || []).length,
-      hesitationEvents: (this.behavioralData.hesitationTimes || []).length,
-      micropauseEvents: (this.behavioralData.microPauses || []).length
-    };
   }
 
   convertToBackendFormat() {
@@ -1930,252 +2051,13 @@ this.isInitialized = false;
 
   }
 
-  setupLogoutButtonListener() {
-    // Wait for DOM to be ready before setting up logout listener
-    const setupListener = () => {
-      // Look for logout button with various possible selectors
-      const logoutSelectors = [
-        'button[onclick*="logout"]',
-        'button:contains("Logout")',
-        'button:contains("Log out")',
-        'a[href*="logout"]',
-        '.logout-button',
-        '#logout-btn',
-        '[data-action="logout"]',
-        'button[type="button"]' // Generic fallback - we'll filter by text content
-      ];
-
-      let logoutButton = null;
-
-      // Try to find logout button using multiple selectors
-      for (const selector of logoutSelectors) {
-        try {
-          if (selector.includes(':contains')) {
-            // Handle :contains selector manually since it's not standard
-            const buttonSelector = selector.split(':contains')[0];
-            const textContent = selector.match(/\("([^"]+)"\)/)?.[1];
-            const buttons = document.querySelectorAll(buttonSelector);
-            for (const btn of buttons) {
-              if (btn.textContent && btn.textContent.toLowerCase().includes(textContent?.toLowerCase() || '')) {
-                logoutButton = btn;
-                break;
-              }
-            }
-          } else {
-            logoutButton = document.querySelector(selector);
-          }
-          
-          if (logoutButton) {
-            console.log(`🎯 Found logout button using selector: ${selector}`);
-            break;
-          }
-        } catch (error) {
-          // Continue to next selector if current one fails
-          continue;
-        }
-      }
-
-      // Fallback: Search for buttons containing "logout" text
-      if (!logoutButton) {
-        const allButtons = document.querySelectorAll('button, a');
-        for (const btn of allButtons) {
-          const text = btn.textContent?.toLowerCase() || '';
-          const onclick = btn.getAttribute('onclick')?.toLowerCase() || '';
-          const href = btn.getAttribute('href')?.toLowerCase() || '';
-          
-          if (text.includes('logout') || text.includes('log out') || 
-              onclick.includes('logout') || href.includes('logout')) {
-            logoutButton = btn;
-            console.log(`🎯 Found logout button by text/attribute search: "${btn.textContent}"`);
-            break;
-          }
-        }
-      }
-
-      if (logoutButton) {
-        // Remove any existing listener to avoid duplicates
-        const existingHandler = logoutButton.getAttribute('data-behavioral-logout-listener');
-        if (existingHandler) {
-          console.log('🔄 Logout listener already exists, skipping');
-          return;
-        }
-
-        // Create the logout handler
-        const handleLogout = async (event) => {
-          console.log('🚪 LOGOUT BUTTON CLICKED: Processing baseline data submission');
-          console.log('🔍 Current user state:', {
-            auth_type: this.auth_type,
-            userId: this.userId,
-            baselineCollectionActive: this.baselineCollectionActive,
-            actionCount: this.behavioralData?.actionCount || 0
-          });
-
-          // Only send baseline data for registration users
-          if (this.auth_type === true && this.behavioralData?.actionCount > 0) {
-            try {
-              console.log('📤 Sending baseline data to backend before logout...');
-              
-              // Call handleUserLogout which will send baseline data
-              const result = await this.handleUserLogout();
-              
-              console.log('✅ Baseline data sent successfully:', result);
-              
-              // Optional: Add a small delay to ensure data is sent
-              await new Promise(resolve => setTimeout(resolve, 500));
-              
-            } catch (error) {
-              console.error('❌ Error sending baseline data:', error);
-              
-              // Still allow logout to proceed even if baseline sending fails
-              console.warn('⚠️ Logout will proceed despite baseline data sending failure');
-            }
-          } else {
-            console.log('ℹ️ No baseline data to send (direct login user or no data collected)');
-          }
-
-          // Mark that we've processed the logout
-          console.log('✅ Logout processing completed');
-        };
-
-        // Add the event listener
-        logoutButton.addEventListener('click', handleLogout, { capture: true });
-        
-        // Mark that we've added the listener
-        logoutButton.setAttribute('data-behavioral-logout-listener', 'true');
-        
-        console.log('✅ Logout button listener added successfully');
-        console.log('🎯 Logout button element:', logoutButton);
-        
-        // Store the listener for cleanup
-        this.eventListeners.push({
-          element: logoutButton,
-          event: 'click',
-          handler: handleLogout
-        });
-
-      } else {
-        console.warn('⚠️ Logout button not found. Will retry in 2 seconds...');
-        
-        // Retry after a delay (button might not be rendered yet)
-        setTimeout(() => {
-          this.setupLogoutButtonListener();
-        }, 2000);
-      }
-    };
-
-    // Setup immediately if DOM is ready, otherwise wait
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', setupListener);
-    } else {
-      // Try immediately
-      setupListener();
-      
-      // Also try after a delay in case the button is dynamically rendered
-      setTimeout(setupListener, 1000);
-    }
-  }
-
-  resetBehavioralArraysForBaseline() {
-  console.log('🔄 Resetting behavioral arrays for fresh baseline collection');
   
-  // Reset all behavioral tracking arrays to start fresh
-  this.behavioralData.cursorMovements = [];
-  this.behavioralData.cursorSpeeds = [];
-  this.behavioralData.cursorAcceleration = [];
-  this.behavioralData.cursorCurvature = [];
-  this.behavioralData.cursorAngles = [];
-  this.behavioralData.keyPressTimes = [];
-  this.behavioralData.keyHoldTimes = [];
-  this.behavioralData.clickTimestamps = [];
-  this.behavioralData.scrollSpeeds = [];
-  this.behavioralData.mouseJitter = [];
-  this.behavioralData.microPauses = [];
-  this.behavioralData.hesitationTimes = [];
-  this.behavioralData.suspiciousPatterns = [];
-  this.behavioralData.keyboardPatterns = [];
   
-  // Reset counters and flags
-  this.behavioralData.scrollChanges = 0;
-  this.behavioralData.idleTime = 0;
-  this.behavioralData.actionCount = 0;
-  this.behavioralData.TabKeyCount = 0;
-  this.behavioralData.pasteDetected = false;
-  
-  // Reset timing references
-  this.behavioralData.lastActionTime = Date.now();
-  this.behavioralData.lastUpdateTime = Date.now();
-  this.behavioralData.lastKeyPress = null;
-  this.behavioralData.lastMouseMove = null;
-  this.behavioralData.lastClickTime = null;
-  this.behavioralData.lastScrollTime = Date.now();
-  this.behavioralData.lastKeyDown = {};
-  
-  // Reset tracking state
-  this.behavioralData.trackingStartTime = Date.now();
-  this.behavioralData.pageLoadTime = Date.now();
-  
-  console.log('✅ Behavioral arrays reset - ready for fresh collection');
-}
 
   
-  handleUserLogin(userId, userData) {
-    console.log('🔐 USER LOGIN: Starting behavioral tracking for authenticated user');
-    
-    this.userId = userId;
-    this.userLifecycleState = 'logged_in';
-    this.loginTimestamp = Date.now();
-    
-    // Update behavioral data
-    this.behavioralData.userId = userId;
-    this.behavioralData.userLifecycleState = 'logged_in';
-    this.behavioralData.loginTimestamp = this.loginTimestamp;
-    this.behavioralData.userData = userData;
-    
-    // Save lifecycle state
-    this.saveUserLifecycleState();
-    
-    // Prepare for dashboard entry
-    console.log('✅ User authenticated - ready for dashboard behavioral tracking');
-    
-    return {
-        userId: this.userId,
-        sessionId: this.sessionId,
-        loginTimestamp: this.loginTimestamp,
-        state: this.userLifecycleState
-    };
-  }
+  
 
-  handleDashboardExit() {
-    console.log('🚪 DASHBOARD EXIT: Stopping behavioral transmission');
-    
-    this.isOnMainDashboard = false;
-    this.transmissionActive = false;
-    
-    // Stop backend transmission
-    this.stopContinuousTransmission();
-    
-    // Update behavioral data
-    this.behavioralData.dashboardExitTime = Date.now();
-    const sessionDuration = this.behavioralData.dashboardExitTime - this.dashboardEntryTime;
-    
-    console.log('📊 Dashboard session completed:', {
-      duration: sessionDuration,
-      totalActions: this.behavioralData.actionCount
-    });
-    
-    // Keep tracking events but stop transmission
-    console.log('👂 Continuing to track behavioral events (no transmission)');
-    
-    // Emit dashboard exit event
-    window.dispatchEvent(new CustomEvent('dashboardBehavioralTrackingEnded', {
-      detail: {
-        sessionId: this.sessionId,
-        dashboardExitTime: this.behavioralData.dashboardExitTime,
-        sessionDuration: sessionDuration,
-        totalActions: this.behavioralData.actionCount
-      }
-    }));
-    }
+  
 
 
 
@@ -2684,7 +2566,7 @@ this.isInitialized = false;
         }
       });
       
-      return this.sendBaselineDataToBackend()
+      return this.sendDataToBackend()
         .then((result) => {
           console.log('✅ Baseline data sent successfully:', result);
           
@@ -2717,7 +2599,7 @@ this.isInitialized = false;
           console.error('❌ Failed to send baseline data:', error);
           
           // Emit logout event with error
-          window.dispatchEvent(new CustomEvent('userLogoutTracking', {
+          window.dispatchEvent(new CustomEvent(this.config.events.logout, {
             detail: {
               sessionId: this.sessionId,
               logoutTime: logoutTime,
@@ -2779,14 +2661,7 @@ this.isInitialized = false;
     };
   }
 
-  userLoggedOut() {
-    return this.handleUserLogout();
-  }
-
-  updateBehavioralData(updates) {
-    this.behavioralData = { ...this.behavioralData, ...updates };
-    console.log('Behavioral data updated:', Object.keys(updates));
-  }
+ 
 
   // Debug method to check current status
   getCollectionStatus() {
@@ -2964,188 +2839,68 @@ startContinuousTransmission() {
         console.log('⚠️ No longer on dashboard - stopping transmission');
         this.stopContinuousTransmission();
       }
-    }, this.backendInterval);
+    }, this.config?.transmissionInterval || this.backendInterval);
 
     console.log('✅ Continuous transmission started (every 1 second)');
     return { blocked: false, started: true };
   }
 
-
-
-
-  recordBaselineEvent(eventType, eventData, timestamp) {
-    if (!this.behavioralData.isCollectingBaseline) {
-      return; 
-    }
-
-    if (!this.behavioralData.baselineBehaviorData) {
-      return;
-    }
-
-
-    const baseline = this.behavioralData.baselineBehaviorData;
-    const currentPage = this.behavioralData.currentPage || 'unknown';
-
-    if (!baseline.cursorMovements) baseline.cursorMovements = [];
-    if (!baseline.cursorSpeeds) baseline.cursorSpeeds = [];
-    if (!baseline.cursorPaths) baseline.cursorPaths = [];
-    if (!baseline.hoverPatterns) baseline.hoverPatterns = [];
-    if (!baseline.keyPressTimes) baseline.keyPressTimes = [];
-    if (!baseline.keySequences) baseline.keySequences = [];
-    if (!baseline.typingRhythm) baseline.typingRhythm = [];
-    if (!baseline.clickTimestamps) baseline.clickTimestamps = [];
-    if (!baseline.clickPatterns) baseline.clickPatterns = [];
-    if (!baseline.doubleClickIntervals) baseline.doubleClickIntervals = [];
-    if (!baseline.scrollSpeeds) baseline.scrollSpeeds = [];
-    if (!baseline.scrollDirections) baseline.scrollDirections = [];
-    if (!baseline.scrollPatterns) baseline.scrollPatterns = [];
-
-    switch (eventType) {
-      case 'mouseMove':
-        if (eventData.clientX !== undefined && eventData.clientY !== undefined) {
-          const movement = {
-            x: eventData.clientX,
-            y: eventData.clientY,
-            timestamp: timestamp,
-            page: currentPage
-          };
-
-          baseline.cursorMovements.push(movement);
-
-          if (baseline.cursorMovements.length > 1) {
-            const prev = baseline.cursorMovements[baseline.cursorMovements.length - 2];
-            const distance = Math.sqrt(
-              Math.pow(movement.x - prev.x, 2) + Math.pow(movement.y - prev.y, 2)
-            );
-            const timeDiff = (timestamp - prev.timestamp) / 1000;
-            const speed = timeDiff > 0 ? distance / timeDiff : 0;
-
-            baseline.cursorSpeeds.push(speed);
-
-            baseline.cursorPaths.push({
-              from: { x: prev.x, y: prev.y },
-              to: { x: movement.x, y: movement.y },
-              distance: distance,
-              speed: speed,
-              page: currentPage,
-              timestamp: timestamp
-            });
-          }
-
-          if (baseline.cursorMovements.length > 0) {
-            const lastMove = baseline.cursorMovements[baseline.cursorMovements.length - 2];
-            if (lastMove && (timestamp - lastMove.timestamp) > 500) {
-              baseline.hoverPatterns.push({
-                x: movement.x,
-                y: movement.y,
-                duration: timestamp - lastMove.timestamp,
-                page: currentPage
-              });
-            }
-          }
-        }
-        break;
-
-      case 'keyPress':
-        baseline.keyPressTimes.push(timestamp);
-
-        if (baseline.keyPressTimes.length > 1) {
-          const prev = baseline.keyPressTimes[baseline.keyPressTimes.length - 2];
-          const interval = timestamp - prev;
-          baseline.typingRhythm.push(interval);
-        }
-
-        baseline.keySequences.push({
-          key: eventData.key || 'unknown',
-          timestamp: timestamp,
-          page: currentPage
-        });
-        break;
-
-      case 'click':
-      case 'buttonClick':
-        baseline.clickTimestamps.push(timestamp);
-
-        if (baseline.clickTimestamps.length > 1) {
-          const prev = baseline.clickTimestamps[baseline.clickTimestamps.length - 2];
-          const interval = timestamp - prev;
-
-          if (interval < 500) { 
-            baseline.doubleClickIntervals.push(interval);
-          }
-
-          baseline.clickPatterns.push({
-            interval: interval,
-            page: currentPage,
-            timestamp: timestamp
-          });
-        }
-        break;
-
-      case 'scroll':
-        const scrollSpeed = eventData.deltaY ? Math.abs(eventData.deltaY) : 0;
-        baseline.scrollSpeeds.push(scrollSpeed);
-
-        baseline.scrollDirections.push({
-          direction: eventData.deltaY > 0 ? 'down' : 'up',
-          speed: scrollSpeed,
-          page: currentPage,
-          timestamp: timestamp
-        });
-
-        baseline.scrollPatterns.push({
-          deltaX: eventData.deltaX || 0,
-          deltaY: eventData.deltaY || 0,
-          page: currentPage,
-          timestamp: timestamp
-        });
-        break;
-    }
-
-    if (currentPage) {
-      if (!baseline.pagesVisited) {
-        baseline.pagesVisited = [currentPage];
-        console.warn('🚨 Fixed missing pagesVisited array in baseline data');
-      }
-
-      if (!baseline.pagesVisited.includes(currentPage)) {
-        baseline.pagesVisited.push(currentPage);
-
-        if (!baseline.pageTransitions) {
-          baseline.pageTransitions = [];
-        }
-
-        if (baseline.pagesVisited.length > 1) {
-          baseline.pageTransitions.push({
-            from: baseline.pagesVisited[baseline.pagesVisited.length - 2],
-            to: currentPage,
-            timestamp: timestamp
-          });
-        }
-      }
-    }
-
-    baseline.actionCount = (baseline.actionCount || 0) + 1;
-    baseline.totalActiveTime = timestamp - baseline.collectionStartTime;
-
-    if (!baseline.idlePeriods) {
-      baseline.idlePeriods = [];
-    }
-
-    if (baseline.actionCount > 1) {
-      const timeSinceLastAction = timestamp - (baseline.lastActionTimestamp || baseline.collectionStartTime);
-      if (timeSinceLastAction > 2000) {
-        baseline.idlePeriods.push({
-          duration: timeSinceLastAction,
-          startTime: baseline.lastActionTimestamp,
-          endTime: timestamp,
-          page: currentPage
-        });
-      }
-    }
-
-    baseline.lastActionTimestamp = timestamp;
+  async sendToBackend() {
+  // CRITICAL GUARD: Block for registration users
+  if (this.auth_type === true) {
+    return { blocked: true, reason: 'registration_user' };
   }
+
+  if (!this.config.apiEndpoints.realtimeAnalysis) {
+    if (this.config.enableConsoleLogging) {
+      console.warn('⚠️ No real-time analysis endpoint configured');
+    }
+    return { blocked: true, reason: 'no_endpoint_configured' };
+  }
+
+  try {
+    const behavioralData = this.convertToBackendFormat();
+    
+    const payload = {
+      session_id: this.sessionId,
+      user_id: this.userId,
+      behavioral_data: behavioralData,
+      timestamp: Date.now(),
+      auth_type: this.auth_type
+    };
+
+    const response = await fetch(this.config.apiEndpoints.realtimeAnalysis, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.config.apiHeaders || {})
+      },
+      body: JSON.stringify(payload),
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (this.config.enableConsoleLogging) {
+      console.log('✅ Real-time data sent:', result);
+    }
+
+    return result;
+
+  } catch (error) {
+    if (this.config.enableConsoleLogging) {
+      console.error('❌ Real-time transmission error:', error);
+    }
+    throw error;
+  }
+}
+
+
+
 
   calculateVariance(values) {
     if (values.length === 0) return 0;
@@ -3224,63 +2979,12 @@ startContinuousTransmission() {
     }
   }
 
-  handleUnauthorizedUser(analysisResult) {
-    // Log unauthorized user details
-    console.warn('🔒 Unauthorized user session details:', {
-      sessionId: this.sessionId,
-      riskScore: analysisResult.risk_score,
-      suspiciousIndicators: analysisResult.suspicious_indicators,
-      recommendation: analysisResult.recommendation
-    });
-
-    // Mark session as unauthorized
-    this.behavioralData.userAuthStatus = 'Unauthorized_user';
-    this.behavioralData.requiresAuthentication = true;
-    this.behavioralData.unauthorizedTime = Date.now();
-
-    // Emit unauthorized user event
-    window.dispatchEvent(new CustomEvent('unauthorizedUser', {
-      detail: {
-        sessionId: this.sessionId,
-        analysisResult,
-        message: 'Need for Authentication'
-      }
-    }));
-
-    // Save unauthorized status
-    this.saveToStorage();
-  }
+  
 
   // Method for React components to call when user logs out
-  processLogoutAndSendBaseline() {
-    console.log('🚪 PROCESSING LOGOUT - Checking for baseline data to send');
-    
-    const status = this.getCollectionStatus();
-    console.log('📊 Current status before logout:', status);
-    
-    if (status.auth_type === true && status.actionCount > 0) {
-      console.log('📤 Registration user logging out - will send baseline data');
-      return this.handleUserLogout();
-    } else {
-      console.log('ℹ️ No baseline data to send (not a registration user or no data collected)');
-      return Promise.resolve({ status: 'no_baseline_data_to_send' });
-    }
-  }
-
+  
   // Test method for registration user flow
-  testRegistrationUserFlow(userId) {
-    console.log('🧪 TESTING: Registration user flow');
-    
-    // Set up as registration user
-    this.auth_type = true;
-    this.handleDashboardEntry(userId);
-    
-    // Check status
-    const status = this.getCollectionStatus();
-    console.log('🧪 Test result:', status);
-    
-    return status;
-  }
+  
 
   // Debug method to check current status
   getCollectionStatus() {
@@ -3305,66 +3009,33 @@ startContinuousTransmission() {
   }
 
   // TEST FUNCTION - Call from browser console
-  testRegistrationFlow(testUserId = 'test-user-123') {
-    console.log('🧪 TESTING REGISTRATION FLOW');
-    console.log('👤 Test User ID:', testUserId);
-    
-    // Reset state
-    this.auth_type = true;
-    this.isRegistrationPhase = true;
-    this.userLifecycleState = 'registering';
-    
-    console.log('📊 Initial state:', {
-      isInitialized: this.isInitialized,
-      isTracking: this.isTracking,
-      auth_type: this.auth_type,
-      currentUrl: window.location.href
-    });
-    
-    // Test initialization
-    if (!this.isInitialized) {
-      console.log('🔧 Initializing tracker...');
-      this.init();
-    }
-    
-    // Test dashboard entry
-    console.log('📞 Testing startBaselineCollection...');
-    const result = this.startBaselineCollection(testUserId);
-    
-    // Test data collection after 3 seconds
-    setTimeout(() => {
-      console.log('🧪 DATA COLLECTION TEST RESULTS:');
-      const status = this.getCollectionStatus();
-      console.log('📊 Collection Status:', status);
-      
-      // Test mouse movement simulation
-      console.log('🖱️ Simulating mouse movement...');
-      const mockMouseEvent = {
-        clientX: Math.random() * 100,
-        clientY: Math.random() * 100
-      };
-      this.trackMouseMovement(mockMouseEvent);
-      
-      console.log('✅ Test completed. Check console for collection status.');
-    }, 3000);
-    
-    return {
-      message: 'Test started. Check console in 3 seconds for results.',
-      initialResult: result
-    };
+ 
+}
+// Factory function for creating configured instances
+let __GBT_INSTANCE__ = null;
+
+export function initGlobalBehaviorTracker(config = {}) {
+  if (!__GBT_INSTANCE__) {
+    __GBT_INSTANCE__ = new GlobalBehavioralTracker(config);
   }
+  return __GBT_INSTANCE__;
 }
 
+export function getGlobalBehaviorTracker() {
+  if (!__GBT_INSTANCE__) {
+    console.warn('⚠️ GlobalBehaviorTracker not initialized. Call initGlobalBehaviorTracker() first.');
+  }
+  return __GBT_INSTANCE__;
+}
+
+// Default instance for backward compatibility
 const globalBehavioralTracker = new GlobalBehavioralTracker();
 
 // Expose globally for console testing
 if (typeof window !== 'undefined') {
   window.globalBehavioralTracker = globalBehavioralTracker;
-  window.testBehavioralTracking = () => globalBehavioralTracker.testRegistrationFlow();
-  
-  console.log('🧪 DEBUG: Global tracker exposed. Test with:');
-  console.log('  window.testBehavioralTracking()');
-  console.log('  window.globalBehavioralTracker.getCollectionStatus()');
+  window.initGlobalBehaviorTracker = initGlobalBehaviorTracker;
+  window.getGlobalBehaviorTracker = getGlobalBehaviorTracker;
 }
 
 export default globalBehavioralTracker;
